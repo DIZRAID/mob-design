@@ -1,0 +1,135 @@
+{
+  "$description": "mob-design TIER 3 — component tokens. Hand-maintained mirror of the component block in css/tokens.css, which is the source of truth. This is where the calibrated, off-scale values live: a card's 15px/16px padding is not a failure of the spacing scale, it is a measured value from a real dense surface. Parking it here keeps the public scale clean AND keeps repetition exact — every card in the product reads one token, so two cards can never drift 1px apart. Values written as an alias ({group.name}) are var() in the CSS; values written literally are literal in the CSS.",
+
+  "control": {
+    "$description": "Height, horizontal padding and radius move together per size step. Heights are the target contract — do not set an ad-hoc height on a button, change its size step. Control geometry is the one thing a density zone never touches: an M button is the same button on a marketing page and in a data grid.",
+    "h-sm": { "$type": "dimension", "$value": "30px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-h-sm" } },
+    "h-md": { "$type": "dimension", "$value": "34px", "$description": "Default. Matches the column header baseline, so a control in a header row aligns to the grid without a nudge.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-control-h-md" } },
+    "h-lg": { "$type": "dimension", "$value": "40px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-h-lg" } },
+    "px-sm": { "$type": "dimension", "$value": "10px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-px-sm" } },
+    "px-md": { "$type": "dimension", "$value": "15px", "$description": "Measured off the primary button.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-control-px-md" } },
+    "px-lg": { "$type": "dimension", "$value": "18px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-px-lg" } },
+    "gap": { "$type": "dimension", "$value": "6px", "$description": "Icon-to-label inside a control, and control-to-control in an action stack.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-control-gap" } },
+    "icon": { "$type": "dimension", "$value": "16px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-icon" } },
+    "icon-lg": { "$type": "dimension", "$value": "20px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-icon-lg" } },
+    "tap-target": { "$type": "dimension", "$value": "44px", "$description": "Coarse-pointer hit floor. base.css grows the hit area with a pseudo-element so the painted control keeps its compact size — density and accessibility are not in tension here.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-tap-target" } }
+  },
+
+  "card": {
+    "$description": "The default container. Padding is asymmetric on purpose (15 vertical / 16 horizontal): at this density, equal padding reads top-heavy once a label sits above a figure. pad-y and pad-x are the two tokens a density zone DOES move.",
+    "bg": { "$type": "color", "$value": "{background.surface}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-card-bg" } },
+    "border": { "$type": "color", "$value": "{border.default}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-card-border" } },
+    "radius": { "$type": "dimension", "$value": "{radius.xl}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-card-radius" } },
+    "pad-y": {
+      "$type": "dimension",
+      "$value": "15px",
+      "$extensions": {
+        "mob.provenance": "src",
+        "mob.cssVar": "--mob-card-pad-y",
+        "mob.density": { "marketing": "{space.24}", "product": "15px", "data": "{space.10}" },
+        "mob.responsive": { "max-width: 767px": "{space.14}" }
+      }
+    },
+    "pad-x": {
+      "$type": "dimension",
+      "$value": "16px",
+      "$extensions": {
+        "mob.provenance": "src",
+        "mob.cssVar": "--mob-card-pad-x",
+        "mob.density": { "marketing": "{space.24}", "product": "16px", "data": "{space.12}" },
+        "mob.responsive": { "max-width: 767px": "{space.14}" }
+      }
+    },
+    "pad-y-sm": { "$type": "dimension", "$value": "12px", "$description": "Mini stat card.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-card-pad-y-sm" } },
+    "pad-x-sm": { "$type": "dimension", "$value": "13px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-card-pad-x-sm" } },
+    "pad-y-lg": { "$type": "dimension", "$value": "20px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-card-pad-y-lg" } },
+    "pad-x-lg": { "$type": "dimension", "$value": "24px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-card-pad-x-lg" } },
+    "gap": { "$type": "dimension", "$value": "14px", "$description": "Gap between stacked cards in a rail.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-card-gap" } }
+  },
+
+  "chip": {
+    "$description": "A chip sits ON a card, so its surface is one step up (surface-raised) and its text is one step brighter (text.muted-hi) than the same metadata would be on the card itself.",
+    "bg": { "$type": "color", "$value": "{background.surface-raised}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-chip-bg" } },
+    "border": { "$type": "color", "$value": "{border.control}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-chip-border" } },
+    "fg": { "$type": "color", "$value": "{text.muted-hi}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-chip-fg" } },
+    "pad-y": { "$type": "dimension", "$value": "3px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-chip-pad-y" } },
+    "pad-x": { "$type": "dimension", "$value": "8px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-chip-pad-x" } },
+    "radius": { "$type": "dimension", "$value": "{radius.xs}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-chip-radius" } }
+  },
+
+  "field": {
+    "$description": "Derived in full — the source surface has no inputs. The rule it follows: a field is SUNKEN at rest and rises to surface on hover, the inverse of a button. That inversion is what tells a reader which controls accept typing.",
+    "bg": { "$type": "color", "$value": "{background.sunken}", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-field-bg" } },
+    "bg-hover": { "$type": "color", "$value": "{background.surface}", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-field-bg-hover" } },
+    "border": { "$type": "color", "$value": "{border.control}", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-field-border" } },
+    "border-hover": { "$type": "color", "$value": "{border.strong}", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-field-border-hover" } },
+    "h": { "$type": "dimension", "$value": "{control.h-lg}", "$description": "Fields are L even where buttons beside them are M — a typing target is not a click target.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-field-h" } },
+    "px": { "$type": "dimension", "$value": "12px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-field-px" } },
+    "radius": { "$type": "dimension", "$value": "{radius.md}", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-field-radius" } },
+    "textarea-min-h": { "$type": "dimension", "$value": "108px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-textarea-min-h" } }
+  },
+
+  "avatar": {
+    "$description": "Entity marks: a letter or icon glyph on a tinted circle, coloured from color.series-tint / color.series-glyph. Never a drop shadow; overlapping marks separate with a border painted in the parent's background.",
+    "sm": { "$type": "dimension", "$value": "20px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-avatar-sm" } },
+    "md": { "$type": "dimension", "$value": "24px", "$description": "List row.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-avatar-md" } },
+    "lg": { "$type": "dimension", "$value": "28px", "$description": "Paired mark (two overlapping entities).", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-avatar-lg" } },
+    "overlap": { "$type": "dimension", "$value": "-9px", "$description": "Negative margin on the second mark of a pair. Roughly a third of the lg diameter: enough overlap to read as one unit, little enough that both glyphs stay legible.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-avatar-overlap" } }
+  },
+
+  "data": {
+    "$description": "Geometry for the marks that carry the numbers: composition bars, discrete meters, sparklines. All measured. These are small on purpose — a data mark supports the figure beside it and must never outweigh it.",
+    "bar-h": { "$type": "dimension", "$value": "5px", "$description": "Composition bar (a stacked proportion strip).", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bar-h" } },
+    "bar-gap": { "$type": "dimension", "$value": "2px", "$description": "Gap between segments. The gap is what makes a stacked bar readable at 5px; without it the hues merge.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bar-gap" } },
+    "bar-radius": { "$type": "dimension", "$value": "{radius.2xs}", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bar-radius" } },
+    "meter-h": { "$type": "dimension", "$value": "22px", "$description": "Full height of a discrete meter row — also the height of its ACTIVE bin.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-meter-h" } },
+    "meter-bin-h": { "$type": "dimension", "$value": "15px", "$description": "Inactive bin. The 15/22 ratio is the whole encoding: the active bin is taller, brighter and glowing; the rest recede.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-meter-bin-h" } },
+    "meter-gap": { "$type": "dimension", "$value": "3px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-meter-gap" } },
+    "spark-h": { "$type": "dimension", "$value": "46px", "$description": "Sparkline area height. No axes, no labels — a sparkline shows shape, the figure above it shows the value.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-spark-h" } },
+    "spark-stroke": { "$type": "dimension", "$value": "1.6px", "$description": "Draw with non-scaling stroke so the line keeps this weight at any width.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-spark-stroke" } },
+    "spark-fill-from": { "$type": "number", "$value": 0.28, "$description": "Top stop of the vertical fill gradient under the line, in the line's own colour.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-spark-fill-from", "mob.cssValue": ".28" } },
+    "spark-fill-to": { "$type": "number", "$value": 0.02, "$description": "Bottom stop. Near zero, not zero — the fill fades into the surface instead of stopping on an edge.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-spark-fill-to", "mob.cssValue": ".02" } }
+  },
+
+  "overlay": {
+    "$description": "Derived. Widths are capped rather than fluid so an overlay never becomes a second page; a flow that needs more room than the modal width is a route, not a modal.",
+    "modal-w": { "$type": "dimension", "$value": "520px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-modal-w" } },
+    "popover-w": { "$type": "dimension", "$value": "260px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-popover-w" } },
+    "tooltip-max-w": { "$type": "dimension", "$value": "240px", "$description": "A tooltip that needs more than this is documentation — use a popover.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-tooltip-max-w" } },
+    "toast-w": { "$type": "dimension", "$value": "340px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-toast-w" } },
+    "menu-max-h": { "$type": "dimension", "$value": "288px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-menu-max-h" } }
+  },
+
+  "rhythm": {
+    "$type": "dimension",
+    "$description": "The three tokens a density zone moves. Declare the zone on a container — data-mob-density=\"marketing\" | \"product\" | \"data\" — and every descendant inherits the temperament without a single screen-level override. Colour, radius and control geometry never move with the zone.",
+    "section-gap": {
+      "$value": "{space.64}",
+      "$description": "Between major sections of a page.",
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-section-gap",
+        "mob.density": { "marketing": "{space.128}", "product": "{space.64}", "data": "{space.32}" },
+        "mob.responsive": { "max-width: 767px": "{space.40}", "max-width: 767px + marketing": "{space.80}" }
+      }
+    },
+    "stack-gap": {
+      "$value": "{space.14}",
+      "$description": "Between siblings in a vertical stack.",
+      "$extensions": {
+        "mob.provenance": "src",
+        "mob.cssVar": "--mob-stack-gap",
+        "mob.density": { "marketing": "{space.24}", "product": "{space.14}", "data": "{space.8}" }
+      }
+    },
+    "grid-gap": {
+      "$value": "{space.20}",
+      "$description": "Between columns and grid cells.",
+      "$extensions": {
+        "mob.provenance": "src",
+        "mob.cssVar": "--mob-grid-gap",
+        "mob.density": { "marketing": "{space.32}", "product": "{space.20}", "data": "{space.12}" }
+      }
+    }
+  }
+}

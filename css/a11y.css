@@ -1,0 +1,97 @@
+/* =============================================================================
+   mob-design — accessibility hardening  [opt-in]
+   -----------------------------------------------------------------------------
+       <html data-mob-a11y="AA">
+   or  <section data-mob-a11y="AA">   (it is just a token override — scope it freely)
+
+   Load AFTER tokens.css.
+
+   ## Why this file exists
+   The calibrated palette is a real, measured design and most of it is
+   comfortably accessible — primary text hits 15.7:1 on a card, and the status
+   hues sit between 6.8:1 and 11.3:1. Four values do not clear their threshold.
+   Rather than quietly "fixing" a design the source declared final, or shipping
+   the failures unremarked, the system does both honestly: the defaults stay
+   calibrated, and this layer swaps exactly the four failing tokens for measured
+   replacements. Nothing else changes.
+
+   Every ratio below was measured, not estimated. Backgrounds tested:
+   canvas #0a0b0d, surface #101114, raised #131417.
+
+   | token              | default | ratio | needs | replacement | ratio |
+   |--------------------|---------|-------|-------|-------------|-------|
+   | --mob-accent       | #7c5dfa | 4.37  | 4.5   | #7a5bf5     | 4.52  |
+   |   (white label on the filled primary button — 13px is not "large text",
+   |    so 3:1 does not apply and font-weight cannot exempt it)
+   | --mob-accent-hover | #8b70ff | 3.58  | 4.5   | #6f4fe8     | 5.30  |
+   | --mob-fg-dim       | #5d636c | 3.12  | 4.5   | #797e85     | 4.62  |
+   | --mob-fg-label     | #767c86 | 4.38  | 4.5   | #797f88     | 4.56  |
+   | --mob-accent-deep  | #5b3fd6 | 2.81  | 3.0   | #6247d8     | 3.07  |
+   |   (bins and other filled marks are non-text UI, so the bar is 3:1)
+   | --mob-border-control | #23262b | 1.4 | 3.0   | #5e6164     | 3.08  |
+   |   (only where a border is the sole thing identifying a control — this
+   |    layer raises it on fields and ghost controls, not on decorative chips)
+
+   The accent shift is deliberately tiny: dE76 between #7c5dfa and #7a5bf5 is
+   1.70, under the 2.3 threshold at which a difference becomes noticeable. The
+   brand does not visibly change; it just stops failing.
+
+   ## What this layer cannot fix for you
+   - The primary button's hover now DARKENS instead of lightening. Lighter and
+     higher-contrast-with-white are mutually exclusive, so the direction has to
+     invert. It reads fine; it is simply not what the prototype did.
+   - Small type is still small. 9.5px metadata that clears 4.5:1 is legible, not
+     comfortable. If a value matters, give it a real type size, not a fixed hue.
+   - Contrast is the floor, not the goal. Nothing here checks that your content
+     has a sensible reading order, a keyboard path or an accessible name.
+   ============================================================================= */
+
+[data-mob-a11y='AA'] {
+  --mob-accent:         #7a5bf5;
+  --mob-accent-hover:   #6f4fe8;
+  --mob-accent-pressed: #6242cf;
+  --mob-accent-deep:    #6247d8;
+
+  --mob-fg-label: #797f88;
+  --mob-fg-dim:   #797e85;
+
+  /* Raised only where the border is the sole identifier of an interactive
+     control. Chip and card borders stay calibrated — they separate surfaces
+     that are already distinguishable, which 1.4.11 does not cover. */
+  --mob-field-border:       #5e6164;
+  --mob-field-border-hover: #7a7e83;
+}
+
+/* Light mode is already comfortably above every threshold; these two are nudged
+   for consistency with the dark hardening rather than to fix a failure. */
+[data-mob-a11y='AA'][data-mob-theme='light'],
+[data-mob-theme='light'] [data-mob-a11y='AA'] {
+  --mob-fg-dim:   #6d737d;
+  --mob-fg-label: #646a74;
+  --mob-field-border:       #a9aeb7;
+  --mob-field-border-hover: #868d97;
+}
+
+/* Windows High Contrast / forced-colours: stop painting, let the OS decide.
+   The system's meaning is carried by structure and text, so it survives this. */
+@media (forced-colors: active) {
+  .mob-btn,
+  .mob-icon-btn,
+  .mob-input,
+  .mob-textarea,
+  .mob-select,
+  .mob-card,
+  .mob-chip {
+    border: 1px solid ButtonBorder;
+    forced-color-adjust: none;
+    background: ButtonFace;
+    color: ButtonText;
+  }
+  .mob-btn--primary { background: Highlight; color: HighlightText; }
+  :focus-visible { outline: 2px solid Highlight; outline-offset: 2px; box-shadow: none; }
+
+  /* Data marks lose their hue, so the active one must still be identifiable by
+     something other than colour. */
+  .mob-meter__bin { background: GrayText; }
+  .mob-meter__bin[data-mob-active] { background: Highlight; outline: 1px solid CanvasText; }
+}

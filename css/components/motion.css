@@ -1,0 +1,523 @@
+/* =============================================================================
+   mob-design — motion
+   -----------------------------------------------------------------------------
+   The system's whole motion vocabulary in one file: the named transition
+   compositions, every keyframe, and the four behaviours (enter, stagger, press,
+   hover) that a component or a page composes from them.
+
+   This file is the CANONICAL HOME for keyframes. A component that needs a
+   spinner, a pulse or a sweep references the name declared here; it does not
+   declare a second copy under a component-specific name. Two definitions of the
+   same loop is how a product ends up with a 660ms spinner in a button and a
+   720ms spinner in a menu — the exact "random 1px differences" failure the spec
+   calls out (§21).
+
+   ANATOMY — what lives here and what consumes it
+   ----------------------------------------------
+     values     --mob-transition-paint / -paint-fast / -motion / -press
+                  full transition lists. A component writes
+                    transition: var(--mob-transition-paint);
+                  and can never drift from the utility class in the next column.
+                  They concatenate: a list resolves last-wins per property, so
+                    transition: var(--mob-transition-paint), var(--mob-transition-press);
+                  is a paint transition plus a correctly-timed press.
+
+     keyframes  mob-fade-in   mob-fade-out   mob-rise      mob-scale-in
+                mob-spin      mob-pulse      mob-skeleton-sweep   mob-shimmer
+
+     classes    .mob-transition  .mob-transition-fast  .mob-transition-transform
+                .mob-enter [--rise|--scale]      driven by data-mob-state
+                .mob-stagger                     driven by --mob-stagger-index
+                .mob-press                       :active scale
+                .mob-hover-lift                  surface + border, never travel
+
+   THE FOUR RULES THIS FILE ENFORCES
+   ---------------------------------
+   1. TRANSFORM AND OPACITY ONLY. Every keyframe below animates `opacity`,
+      `transform`, or one of the independent transform properties (`translate`,
+      `scale`, `rotate`). Nothing here animates width, height, inset, margin or
+      a background-position — those are layout, and animating layout is how a
+      list of rows turns into a jitter.
+   2. NO LAYOUT SHIFT ON HOVER. `.mob-hover-lift` changes the surface and the
+      border. It does not translate, and it does not grow. See its own comment.
+   3. NO BOUNCE, NO OVERSHOOT. The three easings in tokens.css are all
+      monotonic. Nothing in this file introduces a fourth.
+   4. THE PRESS IS ALWAYS THE SAME PRESS. `--mob-press-scale` (.985) is the one
+      value; a control never invents its own.
+
+   REDUCED MOTION
+   --------------
+   Deliberately absent. reset.css collapses every animation and transition in
+   the document to .01ms under `prefers-reduced-motion: reduce`, globally and
+   without exception. Repeating that block here would be dead code that implies
+   components are allowed to opt out. They are not.
+
+   RULES FOR CONSUMERS
+   -------------------
+   1. Reference a keyframe by name; do not copy it into a component file.
+   2. Ambient loops (spin, pulse, sweep, shimmer) run `infinite`. Give the
+      element an accessible busy signal (`aria-busy`, `role="status"`) — the
+      animation is decoration, not information.
+   3. `.mob-enter` is transition-driven, not animation-driven, so open↔closed is
+      reversible mid-flight. Drive it by writing data-mob-state; never by adding
+      and removing a class.
+   4. A loading state must not resize its element. Reserve the box, swap the
+      contents. Nothing in this file will save you from a spinner that replaces
+      a 60px label with a 16px circle.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   Every literal this file needs, declared once. Durations are all derived from
+   the tokens.css scale by a stated multiple rather than typed as new numbers:
+   an ambient loop is longer than any interaction duration, so the scale cannot
+   name it directly, but it can still be the only source of the number.
+
+   Two properties here are per-element knobs and are therefore NOT declared at
+   :root — a `var(…, fallback)` reads better than a global default that every
+   element silently inherits:
+     --mob-stagger-index   set inline (or by the nth-child ladder) on a child of
+                           .mob-stagger. Defaults to 0.
+     --mob-enter-*         set by .mob-enter and its modifiers.
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Named transition compositions -------------------------------------
+     Values, not classes, so the same list is available to a component rule and
+     to a utility class without either restating it.
+
+     `paint` is everything that changes colour: it is safe on any element,
+     because none of these properties can move a box. box-shadow is included
+     because the focus ring is a box-shadow.                                   */
+  --mob-transition-paint:
+    color            var(--mob-duration-normal) var(--mob-ease-standard),
+    background-color var(--mob-duration-normal) var(--mob-ease-standard),
+    border-color     var(--mob-duration-normal) var(--mob-ease-standard),
+    box-shadow       var(--mob-duration-normal) var(--mob-ease-standard);
+
+  /* Controls react faster than surfaces. Anything the pointer is directly on
+     top of — a button, a chip, a row — uses this one. */
+  --mob-transition-paint-fast:
+    color            var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color     var(--mob-duration-fast) var(--mob-ease-standard),
+    box-shadow       var(--mob-duration-fast) var(--mob-ease-standard);
+
+  /* All four transform channels plus opacity. The independent properties are
+     listed alongside `transform` so a rule that animates `scale` composes with
+     one that animates `translate` instead of the two clobbering each other
+     through a single matrix. */
+  --mob-transition-motion:
+    transform var(--mob-duration-fast) var(--mob-ease-standard),
+    translate var(--mob-duration-fast) var(--mob-ease-standard),
+    scale     var(--mob-duration-fast) var(--mob-ease-standard),
+    rotate    var(--mob-duration-fast) var(--mob-ease-standard),
+    opacity   var(--mob-duration-fast) var(--mob-ease-standard);
+
+  /* The press channel on its own, so the composition rules further down can
+     append it to any of the three lists above. A transition list resolves
+     last-wins per property, so appending this after --mob-transition-motion
+     correctly re-times transform to the instant step. */
+  --mob-transition-press:
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+
+  /* --- Travel and scale ---------------------------------------------------
+     The spec puts a dropdown/popover entrance at "opacity + 4-8px translate"
+     (§6). overlay.css sits at the tight end (4px) because a menu opens against
+     its trigger and has almost no distance to cover. A free-standing block
+     revealing on a page has more room, so this sits at the loose end.         */
+  --mob-motion-rise: var(--mob-space-6);   /* [src] spec §6, 4-8px band        */
+
+  /* A modal grows into place from just under full size. .97 is a 3% move: it
+     reads as arrival without ever reading as a zoom, and it stays far inside
+     the 1.02 ceiling the anti-pattern list sets on the other side.            */
+  --mob-motion-scale-from: .97;            /* [drv] */
+
+  /* --- Ambient loop periods -----------------------------------------------
+     Derived, with the resolved value stated so a reader does not have to do the
+     arithmetic. Keep the multiples; do not paste the result back in.          */
+  --mob-motion-spin-duration:    calc(var(--mob-duration-slow)  * 3); /* 660ms  */
+  --mob-motion-pulse-duration:   calc(var(--mob-duration-enter) * 5); /* 1300ms */
+  --mob-motion-sweep-duration:   calc(var(--mob-duration-enter) * 5); /* 1300ms */
+  --mob-motion-shimmer-duration: calc(var(--mob-duration-enter) * 7); /* 1820ms */
+
+  /* How dark a pulse gets. Low enough to read as "not settled yet", high enough
+     that the placeholder never disappears and leaves a hole in the layout.    */
+  --mob-motion-pulse-min: .45;             /* [drv] */
+
+  /* --- Sheen — the moving highlight in a sweep or a shimmer ---------------
+     Mixed from the text colour rather than from white, so it inverts with the
+     theme instead of blowing out a light surface.                             */
+  --mob-motion-sheen: color-mix(in srgb, var(--mob-fg-primary) 6%, transparent);
+  --mob-motion-shimmer-w: 40%;             /* [drv] band width, % of the box   */
+
+  /* --- Stagger ------------------------------------------------------------
+     40ms per step, hard-capped at 240ms total. The cap is the point: a reveal
+     that keeps stepping past a quarter of a second stops being polish and
+     starts being a queue the user has to wait behind. Past the cap every
+     remaining child lands together.                                           */
+  --mob-motion-stagger-step: calc(var(--mob-duration-instant) / 2); /* 40ms  */
+  --mob-motion-stagger-max:  calc(var(--mob-duration-instant) * 3); /* 240ms */
+
+  /* --- Inline-axis sign ---------------------------------------------------
+     A keyframe cannot use logical properties — `translateX` is physical and
+     there is no `translate-inline`. This sign is how a horizontal sweep stays
+     correct in RTL: multiply every inline-axis offset by it.                  */
+  --mob-motion-dir: 1;
+}
+
+/* Two rules, not one selector list: a browser that does not know :dir() must
+   still pick up the [dir] rule instead of dropping the whole block. */
+:dir(rtl)     { --mob-motion-dir: -1; }
+[dir='rtl']   { --mob-motion-dir: -1; }
+
+/* =============================================================================
+   KEYFRAMES
+   Eight, and no more without a system decision. Each one states which component
+   family owns it, so a ninth has to justify why it is not one of these.
+
+   Where a keyframe touches the transform stack it uses the INDEPENDENT
+   properties (`translate`, `scale`, `rotate`) rather than the `transform`
+   shorthand, so it composes: a menu can rise while its pressed row scales, and
+   neither animation overwrites the other's matrix. The two sweeps are the
+   exception — they animate `transform: translateX()` because the elements they
+   drive (::after sheens) carry a resting `transform` of the same kind.
+   ============================================================================= */
+
+/* --- Fade — the floor. Anything that has no direction of travel. ----------- */
+@keyframes mob-fade-in  { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mob-fade-out { from { opacity: 1; } to { opacity: 0; } }
+
+/* --- Rise — dropdowns, popovers, menus, revealed blocks -------------------
+   Starts below its resting place and comes up, so the panel reads as emerging
+   from the surface rather than as arriving from off-screen. Block-axis travel
+   only: it needs no RTL sign. */
+@keyframes mob-rise {
+  from { opacity: 0; translate: 0 var(--mob-motion-rise); }
+  to   { opacity: 1; translate: 0 0; }
+}
+
+/* --- Scale-in — modals, dialogs, sheets ----------------------------------
+   Paired with a backdrop fade. Scale alone, never scale plus translate plus
+   glow — the spec bans the combination outright (§6). */
+@keyframes mob-scale-in {
+  from { opacity: 0; scale: var(--mob-motion-scale-from); }
+  to   { opacity: 1; scale: 1; }
+}
+
+/* --- Spin — every indeterminate spinner in the system ---------------------
+   THE canonical rotation. `rotate` rather than `transform: rotate()` so a
+   spinner sitting inside a pressed control keeps both the spin and the press
+   scale. `linear`, because an indeterminate loop that eases has a visible seam
+   at the wrap point. */
+@keyframes mob-spin { to { rotate: 1turn; } }
+
+/* --- Pulse — placeholder blocks, pending nav items, stale values ----------
+   Run it `infinite alternate` so the return leg is the same curve reversed and
+   the loop has no seam:
+     animation: mob-pulse var(--mob-motion-pulse-duration)
+                var(--mob-ease-standard) infinite alternate;
+   Opacity only. A pulse that also scaled would move the text beside it. */
+@keyframes mob-pulse {
+  from { opacity: 1; }
+  to   { opacity: var(--mob-motion-pulse-min); }
+}
+
+/* --- Skeleton sweep — the sheen crossing a loading placeholder ------------
+   The element is a full-bleed ::after gradient parked one width outside the
+   box; the animation walks it across and one width out the other side. The
+   parent clips. Nothing about either box changes size.
+     from -100%  just before the start edge
+     to    100%  just past the end edge                                        */
+@keyframes mob-skeleton-sweep {
+  from { transform: translateX(calc(var(--mob-motion-dir) * -100%)); }
+  to   { transform: translateX(calc(var(--mob-motion-dir) *  100%)); }
+}
+
+/* --- Shimmer — a value that is refreshing in place ------------------------
+   Not a skeleton. A skeleton stands in for content that is not there yet; a
+   shimmer passes over content that IS there and is being revalidated. It is
+   therefore narrower, slower, and fades at both ends so the band never clips
+   hard against the edge of a live number.
+
+   Travels further than 100% because the band is only --mob-motion-shimmer-w
+   wide and has to clear the box completely before the cycle restarts.         */
+@keyframes mob-shimmer {
+  0%   { opacity: 0; transform: translateX(calc(var(--mob-motion-dir) * -100%)); }
+  25%  { opacity: 1; }
+  75%  { opacity: 1; }
+  100% { opacity: 0; transform: translateX(calc(var(--mob-motion-dir) *  220%)); }
+}
+
+/* =============================================================================
+   TRANSITION UTILITIES
+   Three compositions, matching the three custom properties above. Use the class
+   on a one-off element; use the custom property inside a component rule that
+   already has a `transition` declaration of its own.
+   ============================================================================= */
+
+/* Paint only — colour, background, border, ring. Safe on anything. */
+.mob-transition { transition: var(--mob-transition-paint); }
+
+/* The same list at control speed. This is what a button, chip or row wants. */
+.mob-transition-fast { transition: var(--mob-transition-paint-fast); }
+
+/* The transform stack plus opacity. Named for transform because that is what it
+   is for; opacity rides along because the two are almost always changed
+   together and a second class for it would be noise. */
+.mob-transition-transform { transition: var(--mob-transition-motion); }
+
+/* =============================================================================
+   ENTRANCE
+   -----------------------------------------------------------------------------
+       <div class="mob-enter mob-enter--rise" data-mob-state="open">…</div>
+
+   Transition-driven, not animation-driven. That is the whole design:
+
+     · open <-> closed is REVERSIBLE. Close something mid-open and it turns
+       around from wherever it got to. A keyframe animation would restart from
+       the beginning, which is the jump every hand-rolled dropdown has.
+     · The state lives in one attribute, so React, Vue, Svelte, Alpine, HTMX or
+       eight lines of vanilla all drive it the same way. There is no class to
+       add and remove on a timer, and no animationend listener to leak.
+     · Enter and exit differ only in duration and easing, both parked in
+       variables. The rule in effect at the moment of the flip supplies them:
+       entering reads the base rule, leaving reads the [closed] rule.
+
+   NO ATTRIBUTE MEANS OPEN. An element with .mob-enter and no data-mob-state is
+   visible and interactive — the same contract overlay.css uses. Server-rendered
+   content is therefore never invisible if the JS fails to load.
+
+   This is the generic form of the motion contract in overlay.css. A tooltip,
+   popover, menu, modal or drawer already has it built in; do not stack
+   .mob-enter on top of one.
+   -------------------------------------------------------------------------- */
+.mob-enter {
+  /* Per-element knobs. The modifiers below set the last three. */
+  --mob-enter-duration: var(--mob-duration-normal);
+  --mob-enter-ease:     var(--mob-ease-enter);
+  --mob-enter-delay:    0s;
+  --mob-enter-x:        0;
+  --mob-enter-y:        0;
+  --mob-enter-scale:    1;
+
+  opacity: 1;
+  translate: none;
+  scale: none;
+  visibility: visible;
+  transition:
+    opacity   var(--mob-enter-duration) var(--mob-enter-ease) var(--mob-enter-delay),
+    translate var(--mob-enter-duration) var(--mob-enter-ease) var(--mob-enter-delay),
+    scale     var(--mob-enter-duration) var(--mob-enter-ease) var(--mob-enter-delay),
+    visibility 0s;
+}
+
+.mob-enter[data-mob-state='closed'] {
+  /* Leaving is faster than arriving and uses the accelerating curve: the user
+     has already decided, so the element should get out of the way. */
+  --mob-enter-duration: var(--mob-duration-fast);
+  --mob-enter-ease:     var(--mob-ease-exit);
+  /* A staggered EXIT is always wrong — it holds the last row on screen after
+     the user dismissed the list. Whatever the stagger set, the exit ignores. */
+  --mob-enter-delay:    0s;
+
+  opacity: 0;
+  translate: var(--mob-enter-x) var(--mob-enter-y);
+  scale: var(--mob-enter-scale);
+  pointer-events: none;
+  /* visibility is what takes the element out of the tab order and off the
+     accessibility tree; opacity:0 alone leaves a focusable ghost. It is held
+     back until the motion finishes, otherwise the exit is invisible. It is the
+     one non-transform property transitioned here, and it costs no layout. */
+  visibility: hidden;
+  transition:
+    opacity   var(--mob-enter-duration) var(--mob-enter-ease),
+    translate var(--mob-enter-duration) var(--mob-enter-ease),
+    scale     var(--mob-enter-duration) var(--mob-enter-ease),
+    visibility 0s linear var(--mob-enter-duration);
+}
+
+/* --- Modifiers ------------------------------------------------------------
+   Each one sets a closed-position offset; the base rule animates back to rest.
+   Combine them freely — --rise and --scale together is the modal treatment. */
+
+/* Comes up from below. Block-axis, so it is direction-neutral. */
+.mob-enter--rise  { --mob-enter-y: var(--mob-motion-rise); }
+
+/* Grows into place. */
+.mob-enter--scale { --mob-enter-scale: var(--mob-motion-scale-from); }
+
+/* Inline-axis travel is opt-in rather than a modifier, because "from the left"
+   is meaningless in a bidi system — set --mob-enter-x yourself and multiply it
+   by --mob-motion-dir if the direction is semantic (a drawer) rather than
+   decorative. */
+
+/* An element inserted into the DOM already carrying data-mob-state="open" has
+   no previous value to transition from, so without this it would simply appear.
+   @starting-style supplies that previous value and removes the double-rAF dance
+   every framework otherwise needs. Scoped to the explicit ='open' so a
+   .mob-enter with no attribute — the server-rendered, always-visible case —
+   is never animated on first paint.
+
+   Degrades cleanly: a browser without @starting-style shows the element at
+   rest immediately, which is the correct fallback for an entrance. */
+@starting-style {
+  .mob-enter[data-mob-state='open'] {
+    opacity: 0;
+    translate: var(--mob-enter-x) var(--mob-enter-y);
+    scale: var(--mob-enter-scale);
+  }
+}
+
+/* =============================================================================
+   STAGGER
+   -----------------------------------------------------------------------------
+       <ul class="mob-stagger">
+         <li class="mob-enter" data-mob-state="open">…</li>   0ms
+         <li class="mob-enter" data-mob-state="open">…</li>   40ms
+         <li class="mob-enter" data-mob-state="open">…</li>   80ms
+       </ul>
+
+   Indices are assigned automatically for the first seven children; set
+   --mob-stagger-index inline to override (a virtualised list that renders row
+   400 first still wants a small index, not a 16-second delay).
+
+   THE CAP IS THE FEATURE. min() clamps the computed delay to
+   --mob-motion-stagger-max (240ms) no matter how large the index gets, and the
+   nth-child ladder stops incrementing at the same point. A ten-thousand-row
+   table therefore reveals in a quarter of a second, not in seven minutes, and
+   no row is ever unclickable because its turn has not come up.
+
+   Scope: the container publishes --mob-stagger-delay and .mob-enter consumes
+   it. It deliberately does NOT set `animation-delay` on every child — that
+   would also delay any ambient loop (a spinner, a pulse) that happens to live
+   inside a row. For a keyframe-driven entrance, opt in explicitly:
+
+       .my-row { animation: mob-rise var(--mob-duration-enter)
+                            var(--mob-ease-enter) var(--mob-stagger-delay) backwards; }
+   -------------------------------------------------------------------------- */
+.mob-stagger > * {
+  --mob-stagger-delay: min(
+    calc(var(--mob-stagger-index, 0) * var(--mob-motion-stagger-step)),
+    var(--mob-motion-stagger-max)
+  );
+}
+
+/* Wire the published delay into the entrance transition. Only .mob-enter reads
+   it, so nothing else on the child is delayed — a hover on row three still
+   responds immediately. */
+.mob-stagger > .mob-enter { --mob-enter-delay: var(--mob-stagger-delay); }
+
+/* Auto-index. Seven steps of 40ms is exactly the 240ms cap; the eighth child
+   and everything after it shares the last slot and lands together. */
+.mob-stagger > :nth-child(1) { --mob-stagger-index: 0; }
+.mob-stagger > :nth-child(2) { --mob-stagger-index: 1; }
+.mob-stagger > :nth-child(3) { --mob-stagger-index: 2; }
+.mob-stagger > :nth-child(4) { --mob-stagger-index: 3; }
+.mob-stagger > :nth-child(5) { --mob-stagger-index: 4; }
+.mob-stagger > :nth-child(6) { --mob-stagger-index: 5; }
+.mob-stagger > :nth-child(n+7) { --mob-stagger-index: 6; }
+
+/* =============================================================================
+   PRESS
+   -----------------------------------------------------------------------------
+   The system's one press. Every control that is not already a .mob-btn,
+   .mob-chip, .mob-tab or interactive card gets its feedback from this class
+   rather than inventing a scale of its own.
+
+   --mob-press-scale is .985 [src]. A 1.5% shrink is felt more than it is seen,
+   which is the point: the control acknowledges the pointer without moving the
+   text under it. transform-origin stays at the centre so a wide button
+   contracts symmetrically instead of pulling away from its neighbour.
+   ============================================================================= */
+.mob-press {
+  transition: var(--mob-transition-press);
+}
+
+/* A dead control must not answer the pointer. :where() keeps the guard free of
+   specificity so a component rule can still override the pressed transform. */
+.mob-press:where(:not(:disabled, [aria-disabled='true'], [data-mob-loading])):active {
+  transform: scale(var(--mob-press-scale));
+}
+
+/* =============================================================================
+   HOVER LIFT
+   -----------------------------------------------------------------------------
+   "Lift" here is OPTICAL, not geometric. The element does not translate, does
+   not scale, and does not grow a shadow. It gets a lighter surface and a
+   lighter border, and it occupies exactly the same box before and after.
+
+   Why, specifically:
+     · The handoff's cards are fused segments inside a 1px frame with
+       overflow:hidden. A card that translated on hover would drag its seam out
+       of alignment with the segment beside it, and the frame would clip the
+       overshoot anyway.
+     · Depth in this system comes from surface + 1px border, never from a drop
+       shadow (design DNA). A shadow-based lift would be a different system.
+     · "Layout shifts on hover" and "dramatic card scaling" are both on the
+       spec's anti-pattern list (§21).
+
+   The element must already carry a border for the border half to be visible —
+   compose with .mob-bordered, or use it on a .mob-card, which has one.
+   ============================================================================= */
+.mob-hover-lift {
+  transition: var(--mob-transition-paint-fast);
+}
+
+/* Guarded on (hover: hover): on a touch screen the :hover state sticks after a
+   tap and the row stays highlighted until something else is tapped, which reads
+   as a selection the user did not make. */
+@media (hover: hover) and (pointer: fine) {
+  .mob-hover-lift:where(:not(:disabled, [aria-disabled='true'], [data-mob-loading])):hover {
+    background-color: var(--mob-bg-hover);
+    border-color: var(--mob-border-hover);
+  }
+}
+
+/* The keyboard half of the same affordance. base.css already draws the ring; a
+   ring alone would still leave the keyboard user with LESS information than the
+   pointer user, who also gets the surface and border change. This restates that
+   change so a focused element and a hovered one read identically — the pattern
+   card.css uses for .mob-card--interactive and .mob-list-row--interactive.
+
+   Deliberately OUTSIDE the (hover: hover) guard above. That guard exists to stop
+   a sticky :hover after a tap; it has nothing to say about keyboard focus, which
+   happens on touch devices too (an external keyboard, a switch, a screen-reader
+   in browse mode). Scoping focus behind a pointer query would delete the ring's
+   companion state on exactly the devices least able to spare it.
+
+   Same (0,2,0) specificity and the same disabled/loading guard as the hover
+   rule, so the two stay interchangeable and a dead control answers neither. */
+.mob-hover-lift:where(:not(:disabled, [aria-disabled='true'], [data-mob-loading])):focus-visible {
+  background-color: var(--mob-bg-hover);
+  border-color: var(--mob-border-hover);
+}
+
+/* =============================================================================
+   COMPOSITION
+   -----------------------------------------------------------------------------
+   `transition` is one property, so two classes that each declare it cannot
+   merge — the later one in this file simply wins and the earlier one's channels
+   are silently lost. That is a trap, not a feature: `class="mob-press
+   mob-transition-fast"` would give you a paint transition and a press that
+   snaps, with nothing to indicate why.
+
+   These four rules are the fix. Each restates the full list for one legitimate
+   pairing, at specificity (0,2,0) so it beats both halves regardless of the
+   order the classes appear in the markup. They are the only combinations worth
+   supporting; anything more elaborate is a component, and a component writes
+   its own single `transition` declaration.
+   ============================================================================= */
+.mob-transition.mob-press {
+  transition: var(--mob-transition-paint), var(--mob-transition-press);
+}
+.mob-transition-fast.mob-press {
+  transition: var(--mob-transition-paint-fast), var(--mob-transition-press);
+}
+.mob-transition-transform.mob-press {
+  transition: var(--mob-transition-motion), var(--mob-transition-press);
+}
+/* The interactive card in the handoff: surface and border answer the pointer,
+   the whole box answers the click. */
+.mob-hover-lift.mob-press {
+  transition: var(--mob-transition-paint-fast), var(--mob-transition-press);
+}

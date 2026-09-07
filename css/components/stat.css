@@ -1,0 +1,381 @@
+/* =============================================================================
+   mob-design — stat (metric block, pair, reference row, KPI row)
+   -----------------------------------------------------------------------------
+   The heart of every data surface in this system. Four blocks, one grammar:
+
+     .mob-stat       one metric: label, figure, qualifier
+     .mob-stat-pair  two metrics fused by a 1px vertical hairline
+     .mob-stat-row   the reference line under a hairline at the foot of a card
+     .mob-kpi-row    a responsive row of metrics for a dashboard header
+
+   ANATOMY
+     .mob-stat                                .mob-stat-pair
+     ┌─────────────────────────┐              ┌──────────┬──────────┐
+     │ FEES           all-time │ __head       │ FEES     │ PNL      │
+     │ $0.2194                 │ __value      │ $0.2194  │ +$0.2195 │
+     │ uncollected             │ __sub        │ uncollec │ +0.67%   │
+     └─────────────────────────┘              └──────────┴──────────┘
+                                                    18px ╎1px╎ 18px
+     .mob-stat-row
+     ─────────────────────────────────────────  1px --mob-border-subtle
+     Value                        $31.12  100% USDG
+     __label                     __value  __qualifier
+
+     <div class="mob-stat mob-stat--md">
+       <div class="mob-stat__head">
+         <span class="mob-stat__label mob-label">FEES</span>
+         <span class="mob-stat__meta">all-time</span>
+       </div>
+       <div class="mob-stat__value">$0.2194</div>
+       <div class="mob-stat__sub">uncollected</div>
+     </div>
+
+   RULES FOR A CONSUMER
+   1. __label carries .mob-label as well. The micro-label is a type role owned by
+      base.css and it is not restated here; __label only guarantees the label
+      never inherits the figure's tone. Drop __head when there is no right-hand
+      meta and put __label straight in the block.
+   2. The size step is a hierarchy decision, not a fitting decision. One --xl per
+      screen (the portfolio total), one --md pair per card (the emphasis of the
+      whole design), --sm for everything that supports them. If a number needs a
+      bigger step to be noticed, the card has too many numbers.
+   3. --positive / --negative flip BOTH the figure and the sub line — the handoff
+      is explicit that a negative figure turns its sub line red too. Use them
+      when the sub line restates the same signed fact ("+$0.2195" over "+0.67%").
+      When only the amount is signed and the sub is neutral description — the
+      [src] LOOSE card, "$2.80" in red over "5 tokens" in grey; the [src] FEES
+      hero, green over "uncollected" in dim — leave the block untoned and put
+      .mob-tone-negative or data-mob-sign on __value alone. That composes,
+      because the figure takes its colour by inheritance and nothing else does.
+   4. To retone the sub line by itself, rebind --mob-stat-sub-fg on the element.
+      Tone utilities do not reach it; that is deliberate, so a stray utility
+      cannot quietly break the positive/negative pairing in rule 3.
+   5. --md is the default size and is declared on the block itself; emitting
+      .mob-stat--md is harmless and does nothing. Restating those values would
+      give the system two sources for one number.
+
+   THE REFERENCE-VALUE RULE
+   .mob-stat-row exists to keep a reference number small. Position value, cost
+   basis, notional — the figures a reader checks but does not act on — go in the
+   footer row at 12.5px under a hairline, never in a .mob-stat. The whole point
+   of the redesign this system was calibrated from was to put fees and PnL above
+   position value: a reference value that outgrows the metrics above it has
+   inverted the card's hierarchy. It is never the largest number in a card.
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   The four size steps and their rhythm, measured off the handoff. The gaps are
+   not decoration: 6/4 at 16px, 4/5 at 22px, 5 at 23px, 6 at 27px — the label
+   sits closer as the figure gets smaller, which is what keeps a --sm mini card
+   reading as one object.
+   -------------------------------------------------------------------------- */
+:root {
+  /* label -> value, value -> sub */
+  --mob-stat-gap-label-sm: var(--mob-space-6);  /* [src] FEES / LOOSE mini card */
+  --mob-stat-gap-sub-sm:   var(--mob-space-4);  /* [src] */
+  --mob-stat-gap-label-md: var(--mob-space-4);  /* [src] in-card hero pair      */
+  --mob-stat-gap-sub-md:   5px;                 /* [src] off-scale              */
+  --mob-stat-gap-label-lg: 5px;                 /* [src] realized PnL           */
+  --mob-stat-gap-sub-lg:   var(--mob-space-6);  /* [drv] */
+  --mob-stat-gap-label-xl: var(--mob-space-6);  /* [src] portfolio total        */
+  --mob-stat-gap-sub-xl:   var(--mob-space-6);  /* [drv] */
+
+  /* Active step. Rebound by the size modifiers; defaults are the --md pair. */
+  --mob-stat-gap-label: var(--mob-stat-gap-label-md);
+  --mob-stat-gap-sub:   var(--mob-stat-gap-sub-md);
+
+  /* Colour + sub type roles. Rebound by the size and tone modifiers. */
+  --mob-stat-value-fg: var(--mob-fg-primary);
+  --mob-stat-sub-fs:   var(--mob-size-3xs);
+  --mob-stat-sub-fg:   var(--mob-fg-dim);
+
+  /* Loading. ch, so one token holds at every size step. */
+  --mob-stat-skeleton-w: 6ch;                   /* [drv] */
+
+  /* Pair + reference row */
+  --mob-stat-pair-gap:           18px;                /* [src] 18 ╎1╎ 18   */
+  --mob-stat-row-gap:            var(--mob-space-12);  /* [src] above the rule */
+  --mob-stat-row-pad:            var(--mob-space-10);  /* [src] below the rule */
+  --mob-stat-row-qualifier-gap:  var(--mob-space-6);   /* [drv] */
+
+  /* KPI row */
+  --mob-kpi-min:       160px;               /* [drv] an --xl figure + card padding */
+  --mob-kpi-gap-tight: var(--mob-space-12); /* [src] the FEES / LOOSE pair         */
+}
+
+/* -----------------------------------------------------------------------------
+   BLOCK
+   The block's own colour IS the figure's colour. __value therefore declares no
+   colour at all and inherits — which is what lets .mob-tone-* and
+   [data-mob-sign] compose onto __value without fighting this file for
+   specificity. Every other part sets its colour explicitly, so none of them
+   picks up the tone by accident.
+   -------------------------------------------------------------------------- */
+.mob-stat {
+  display: block;
+  min-inline-size: 0;
+  color: var(--mob-stat-value-fg);
+}
+
+/* Label row: micro-label left, optional meta right. Baseline-aligned because
+   the two are different sizes ([src] REALIZED PNL / all-time). */
+.mob-stat__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mob-space-8);
+}
+
+/* Typography comes from .mob-label in base.css. The colour is restated — from
+   the same semantic token, so the two cannot drift in value — so that a toned
+   block can never bleed into its own label. */
+.mob-stat__label {
+  min-inline-size: 0;
+  color: var(--mob-fg-label);
+}
+
+.mob-stat__meta {
+  flex: 0 0 auto;
+  font-size: var(--mob-size-3xs);   /* [src] */
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-dim);         /* [src] */
+}
+
+/* The figure. Typography is set per size step below; this rule holds only what
+   every step shares. :not(:first-child) so a bare figure with no label above it
+   does not carry a phantom gap. */
+.mob-stat__value {
+  display: block;
+  line-height: var(--mob-leading-tight);
+  font-variant-numeric: tabular-nums;
+}
+.mob-stat__value:not(:first-child) {
+  margin-block-start: var(--mob-stat-gap-label);
+}
+
+.mob-stat__sub {
+  display: block;
+  margin-block-start: var(--mob-stat-gap-sub);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-stat-sub-fs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-stat-sub-fg);
+}
+
+/* -----------------------------------------------------------------------------
+   SIZES
+   Each step is the same ramp as the .mob-figure-* roles in base.css: mono at
+   16px, sans 600 / -0.02em above it.
+   -------------------------------------------------------------------------- */
+
+/* --md — sans 22px, the default. The in-card hero pair, the emphasis of the
+   whole design. Declared on the element rather than on a --md class so there is
+   one source for the step; the size modifiers below out-specify it. */
+.mob-stat__value {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-5xl);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+}
+
+/* --sm — mono 16px. The [src] FEES / LOOSE mini cards. Mono, not sans: at 16px
+   the figure is still data, not a headline. */
+.mob-stat--sm {
+  --mob-stat-gap-label: var(--mob-stat-gap-label-sm);
+  --mob-stat-gap-sub:   var(--mob-stat-gap-sub-sm);
+  --mob-stat-sub-fs:    var(--mob-size-2xs);  /* [src] 10px */
+  --mob-stat-sub-fg:    var(--mob-fg-label);  /* [src] */
+}
+.mob-stat--sm .mob-stat__value {
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-3xl);
+  font-weight: var(--mob-weight-regular);
+  letter-spacing: var(--mob-tracking-normal);
+}
+
+/* --lg — sans 23px. The [src] realized-PnL figure. */
+.mob-stat--lg {
+  --mob-stat-gap-label: var(--mob-stat-gap-label-lg);
+  --mob-stat-gap-sub:   var(--mob-stat-gap-sub-lg);
+  --mob-stat-sub-fs:    var(--mob-size-xs);   /* [src] 10.5px */
+  --mob-stat-sub-fg:    var(--mob-fg-label);  /* [src] */
+}
+.mob-stat--lg .mob-stat__value {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-6xl);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+}
+
+/* --xl — sans 27px. The portfolio total. One per screen. */
+.mob-stat--xl {
+  --mob-stat-gap-label: var(--mob-stat-gap-label-xl);
+  --mob-stat-gap-sub:   var(--mob-stat-gap-sub-xl);
+  --mob-stat-sub-fs:    var(--mob-size-xs);   /* [drv] */
+  --mob-stat-sub-fg:    var(--mob-fg-label);  /* [drv] */
+}
+.mob-stat--xl .mob-stat__value {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-7xl);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+}
+
+/* -----------------------------------------------------------------------------
+   TONE
+   The modifier and the data attribute do the same thing, so a component can
+   bind straight off the sign of the number instead of branching in markup.
+   Both flip the figure and the sub line together — see rule 3 in the header for
+   the case where only the figure is signed.
+   -------------------------------------------------------------------------- */
+.mob-stat--positive,
+.mob-stat[data-mob-sign='positive'] {
+  --mob-stat-value-fg: var(--mob-positive);
+  --mob-stat-sub-fg:   var(--mob-positive);
+}
+.mob-stat--negative,
+.mob-stat[data-mob-sign='negative'] {
+  --mob-stat-value-fg: var(--mob-negative);
+  --mob-stat-sub-fg:   var(--mob-negative);
+}
+
+/* Numeric data reads better right-aligned when it is being compared down a
+   column (spec §4.17). Alignment only — nothing else changes. */
+.mob-stat--end {
+  text-align: end;
+}
+
+/* -----------------------------------------------------------------------------
+   STATES
+   A stat is not interactive: it has no hover, press, focus or selected state.
+   It has the two states its data has.
+   -------------------------------------------------------------------------- */
+
+/* Loading. Use it when there is no figure yet; the bar stands in at a width
+   derived from the figure's own font size, so nothing reflows when the number
+   lands. If a value is already on screen and merely refreshing, leave it —
+   swapping a live number for a skeleton is a worse read than a stale one.
+   Pair with aria-busy="true" on the block. */
+.mob-stat[data-mob-loading] .mob-stat__value {
+  /* Block, never inline-block. __value is block-level at rest, and an inline-level
+     skeleton changes the box twice over: it joins the line box of an inline
+     __label sitting directly above it (the documented no-__head markup), which
+     collapses the label and the figure onto one line, and — with no text inside
+     it — its baseline is its bottom margin edge, so the strut's descender is
+     added under it and the block grows. Block keeps the box exactly as it was. */
+  display: block;
+  inline-size: var(--mob-stat-skeleton-w);
+  /* The exact line box of the figure it replaces, at every size step. */
+  block-size: calc(1em * var(--mob-leading-tight));
+  border-radius: var(--mob-radius-2xs);
+  background-color: var(--mob-bg-tile);   /* [src] skeleton surface */
+  color: transparent;
+  /* No duration token is long enough for a breathing skeleton, so the period is
+     derived: 5 × --mob-duration-enter = 1300ms. reset.css flattens it under
+     prefers-reduced-motion. */
+  animation: mob-pulse calc(var(--mob-duration-enter) * 5)
+             var(--mob-ease-standard) infinite alternate;
+}
+
+/* text-align moves inline content, not a block box, so --end needs the margin to
+   carry the bar over. Without this the skeleton sits at the inline start while
+   the figure it stands in for sat at the inline end. */
+.mob-stat--end[data-mob-loading] .mob-stat__value {
+  margin-inline-start: auto;
+}
+/* Error. The figure goes quiet — render an em dash, not a stale number — and
+   the sub line carries the reason. The retry action belongs to the surrounding
+   card, not to a metric. */
+.mob-stat[data-mob-error] {
+  --mob-stat-value-fg: var(--mob-fg-dim);
+  --mob-stat-sub-fg:   var(--mob-negative);
+}
+
+/* -----------------------------------------------------------------------------
+   PAIR
+   Two equal metrics split by a 1px hairline. The hairline is a border on the
+   second column plus a matching inline start padding, not a spacer element:
+   18 ╎1╎ 18 exactly as measured, with nothing presentational in the markup and
+   correct mirroring in RTL. align-items: stretch is load-bearing — it is what
+   makes the rule span the taller column.
+
+   Takes any number of children, but two is the design: three metrics of equal
+   weight in one card is a table, and should be one.
+   -------------------------------------------------------------------------- */
+.mob-stat-pair {
+  display: flex;
+  align-items: stretch;
+  gap: var(--mob-stat-pair-gap);
+}
+.mob-stat-pair > * {
+  flex: 1 1 0;
+  min-inline-size: 0;
+}
+.mob-stat-pair > * + * {
+  border-inline-start: var(--mob-hairline) solid var(--mob-border-frame);
+  padding-inline-start: var(--mob-stat-pair-gap);
+}
+
+/* -----------------------------------------------------------------------------
+   REFERENCE ROW
+   The footer line under a hairline: what the position is worth, in the smallest
+   type the card uses. See "the reference-value rule" in the header — this row
+   is where a number goes when it must be available but must not compete.
+   -------------------------------------------------------------------------- */
+.mob-stat-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mob-space-8);
+  margin-block-start: var(--mob-stat-row-gap);
+  padding-block-start: var(--mob-stat-row-pad);
+  border-block-start: var(--mob-hairline) solid var(--mob-border-subtle);
+  font-family: var(--mob-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.mob-stat-row__label {
+  min-inline-size: 0;
+  font-size: var(--mob-size-2xs);      /* [src] 10px   */
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);          /* [src] */
+}
+.mob-stat-row__value {
+  flex: 0 0 auto;
+  font-size: var(--mob-size-base);     /* [src] 12.5px */
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-secondary);      /* [src] */
+}
+/* Sits inside __value ("$31.12 100% USDG"). The gap is a margin, not a typed
+   space, so it holds when the qualifier is a separate element. */
+.mob-stat-row__qualifier {
+  margin-inline-start: var(--mob-stat-row-qualifier-gap);
+  font-size: var(--mob-size-3xs);      /* [src] 9.5px */
+  color: var(--mob-fg-dim);            /* [src] */
+}
+
+/* -----------------------------------------------------------------------------
+   KPI ROW
+   A dashboard header's metrics. auto-fit + minmax so columns reflow by
+   available width rather than by breakpoint; min() keeps a single column from
+   overflowing a container narrower than --mob-kpi-min.
+
+   To fuse KPIs into one framed block with hairline seams, do not rebuild the
+   construction here — wrap them in the segmented card from card.css, which owns
+   the --mob-bg-frame parent, the 1px gaps and the overflow clip.
+   -------------------------------------------------------------------------- */
+.mob-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--mob-kpi-min), 100%), 1fr));
+  gap: var(--mob-grid-gap);
+  align-items: start;
+}
+
+/* The [src] 12px pairing of the FEES and LOOSE mini cards. */
+.mob-kpi-row--tight {
+  gap: var(--mob-kpi-gap-tight);
+}

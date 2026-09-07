@@ -1,0 +1,69 @@
+/* =============================================================================
+   mob-design — entry point
+   -----------------------------------------------------------------------------
+       @import 'mob-design/css/mob.css';
+
+   Cascade order is load-bearing. Tokens must land before anything reads them,
+   base must land before components override a type role, and utilities must land
+   last so a utility can win against a component rule without !important.
+
+   Two layers are deliberately NOT imported here, because both change the
+   calibrated defaults and that has to be a decision someone makes on purpose:
+
+     brand.css  the one-hex rebrand — derives the whole accent family from a
+                single colour instead of the calibrated violet
+     a11y.css   AA hardening — swaps the four calibrated values that miss their
+                contrast threshold for measured replacements
+
+   Pull either in after this file:
+
+       @import 'mob-design/css/mob.css';
+       @import 'mob-design/css/brand.css';
+       @import 'mob-design/css/a11y.css';
+       :root { --mob-brand: #e05c2b; }
+
+   a11y.css activates on an attribute, so it is inert until you opt in:
+   <html data-mob-a11y="AA">. See its header for the measured ratios.
+
+   Fonts are your responsibility — the system does not fetch them for you. See
+   docs/09-adoption.md for the loading strategy and the fallback behaviour.
+   ============================================================================= */
+
+/* 1 — normalise, and set the global motion + focus policy */
+@import './reset.css';
+
+/* 2 — the token contract: primitives, semantics, component tokens, themes */
+@import './tokens.css';
+
+/* 3 — body defaults, type roles, tone utilities, focus contract */
+@import './base.css';
+
+/* 4 — layout primitives before the components that sit inside them */
+@import './components/layout.css';
+
+/* 5 — controls */
+@import './components/button.css';
+@import './components/field.css';
+@import './components/choice.css';
+
+/* 6 — surfaces and content */
+@import './components/chip.css';
+@import './components/card.css';
+@import './components/stat.css';
+@import './components/table.css';
+
+/* 7 — navigation */
+@import './components/nav.css';
+
+/* 8 — floating layers */
+@import './components/overlay.css';
+
+/* 9 — status, loading and empty */
+@import './components/feedback.css';
+
+/* 10 — data marks */
+@import './components/dataviz.css';
+
+/* 11 — motion vocabulary, then utilities last so they win */
+@import './components/motion.css';
+@import './components/utilities.css';

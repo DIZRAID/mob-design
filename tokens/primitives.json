@@ -1,0 +1,526 @@
+{
+  "$description": "mob-design TIER 1 — primitives. Hand-maintained mirror of the :root primitive block in css/tokens.css, which is the source of truth. Raw values; never consumed directly by a component. $extensions['mob.cssVar'] names the custom property each token emits, so a diff against tokens.css can be mechanical. $extensions['mob.provenance'] is 'src' (measured from the calibrated handoff) or 'drv' (extended by a stated rule).",
+  "color": {
+    "$type": "color",
+    "$description": "Dark-native palette. The neutral ramp is intentionally dense between 1000 and 700: on a near-black canvas, surface separation and hairlines live inside a ~20-unit luminance band. That density is the look — do not simplify it away.",
+    "gray": {
+      "1000": {
+        "$value": "#060708",
+        "$description": "Below-canvas, sunken wells.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-gray-1000" }
+      },
+      "975": {
+        "$value": "#0a0b0d",
+        "$description": "Page canvas.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-975" }
+      },
+      "950": {
+        "$value": "#0e0f12",
+        "$description": "Alt / sunken panel.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-950" }
+      },
+      "925": {
+        "$value": "#101114",
+        "$description": "Card and segment surface.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-925" }
+      },
+      "900": {
+        "$value": "#131417",
+        "$description": "Chip surface.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-900" }
+      },
+      "880": {
+        "$value": "#141519",
+        "$description": "Chip surface, alt.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-880" }
+      },
+      "870": {
+        "$value": "#141518",
+        "$description": "Skeleton / inner tile.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-870" }
+      },
+      "850": {
+        "$value": "#15171a",
+        "$description": "Hover surface.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-850" }
+      },
+      "825": {
+        "$value": "#17191d",
+        "$description": "In-card hairline.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-825" }
+      },
+      "800": {
+        "$value": "#1c1e22",
+        "$description": "Segment frame / hairline. This is the colour a fused card's parent is painted, so 1px gaps read as hairlines.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-800" }
+      },
+      "780": {
+        "$value": "#1e2024",
+        "$description": "Card border.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-780" }
+      },
+      "760": {
+        "$value": "#23262b",
+        "$description": "Control and chip border.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-760" }
+      },
+      "750": {
+        "$value": "#24262b",
+        "$description": "Dashed empty-state border.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-750" }
+      },
+      "720": {
+        "$value": "#2a2d33",
+        "$description": "Strong border.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-720" }
+      },
+      "680": {
+        "$value": "#33373e",
+        "$description": "Strong border, hover.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-gray-680" }
+      },
+      "560": {
+        "$value": "#5d636c",
+        "$description": "Dim text.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-560" }
+      },
+      "500": {
+        "$value": "#767c86",
+        "$description": "Label text.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-500" }
+      },
+      "440": {
+        "$value": "#8f959e",
+        "$description": "Muted text.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-440" }
+      },
+      "400": {
+        "$value": "#9aa0a8",
+        "$description": "Muted text on a raised surface (chips).",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-400" }
+      },
+      "300": {
+        "$value": "#b4bac2",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-gray-300" }
+      },
+      "200": {
+        "$value": "#cfd3da",
+        "$description": "Secondary text.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-200" }
+      },
+      "100": {
+        "$value": "#e8eaed",
+        "$description": "Primary text.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-100" }
+      },
+      "050": {
+        "$value": "#f4f5f7",
+        "$description": "Light-mode canvas.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-gray-050" }
+      },
+      "000": {
+        "$value": "#ffffff",
+        "$description": "Text on a filled accent.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gray-000" }
+      }
+    },
+    "violet": {
+      "$description": "Brand. The whole accent family sits on one hue. Bright members land on the Tailwind-400/300 luminance tier: legible on near-black without glowing.",
+      "950": {
+        "$value": "#211a3d",
+        "$description": "Tint fill (avatar).",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-950" }
+      },
+      "900": {
+        "$value": "#2a1d4d",
+        "$description": "Tint fill, stronger.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-900" }
+      },
+      "700": {
+        "$value": "#5b3fd6",
+        "$description": "Deep accent (inactive bins).",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-700" }
+      },
+      "600": {
+        "$value": "#6d4df0",
+        "$description": "Accent, saturated.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-600" }
+      },
+      "550": {
+        "$value": "#6b4ce8",
+        "$description": "Pressed.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-violet-550" }
+      },
+      "500": {
+        "$value": "#7c5dfa",
+        "$description": "BRAND — primary action.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-500" }
+      },
+      "450": {
+        "$value": "#8b70ff",
+        "$description": "Brand hover.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-450" }
+      },
+      "400": {
+        "$value": "#a78bfa",
+        "$description": "Link.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-400" }
+      },
+      "300": {
+        "$value": "#c4b5fd",
+        "$description": "Bright — active bin, entity glyphs, link hover.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-violet-300" }
+      }
+    },
+    "green": {
+      "$description": "Positive. The source palette is built on the 400 tier; 300 and 950 extend it upward and downward.",
+      "400": {
+        "$value": "#34d399",
+        "$description": "Positive.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-green-400" }
+      },
+      "300": {
+        "$value": "#6ee7b7",
+        "$description": "Positive, raised.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-green-300" }
+      },
+      "950": {
+        "$value": "#0d2a20",
+        "$description": "Positive tint.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-green-950" }
+      }
+    },
+    "red": {
+      "400": {
+        "$value": "#f87171",
+        "$description": "Negative.",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-red-400" }
+      },
+      "300": {
+        "$value": "#fca5a5",
+        "$description": "Negative, raised.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-red-300" }
+      },
+      "950": {
+        "$value": "#2a1416",
+        "$description": "Negative tint.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-red-950" }
+      }
+    },
+    "amber": {
+      "$description": "Warning. Derived on the same 400 tier as green and red so it belongs to the family rather than shouting over it.",
+      "400": {
+        "$value": "#fbbf24",
+        "$description": "Warning.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-amber-400" }
+      },
+      "300": {
+        "$value": "#fcd34d",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-amber-300" }
+      },
+      "950": {
+        "$value": "#2b1f06",
+        "$description": "Warning tint.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-amber-950" }
+      }
+    },
+    "blue": {
+      "$description": "Info. Same derivation rule as amber.",
+      "400": {
+        "$value": "#60a5fa",
+        "$description": "Info.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-blue-400" }
+      },
+      "300": {
+        "$value": "#93c5fd",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-blue-300" }
+      },
+      "950": {
+        "$value": "#0d1c33",
+        "$description": "Info tint.",
+        "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-blue-950" }
+      }
+    },
+    "affirm": {
+      "$description": "Muted action tone for 'money in' / confirm. A calibrated triplet: intent reads at rest, saturation is spent only on hover, and the row never glows. Re-themed in light mode, so these primitives carry a mob.theme.light value.",
+      "fg": {
+        "$value": "#7fbfa2",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-affirm-fg", "mob.theme.light": "#14664a" }
+      },
+      "bg": {
+        "$value": "#111a16",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-affirm-bg", "mob.theme.light": "#edf8f3" }
+      },
+      "border": {
+        "$value": "#22332b",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-affirm-border", "mob.theme.light": "#c2e3d4" }
+      },
+      "fg-hover": {
+        "$value": "#96d4b6",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-affirm-fg-hover", "mob.theme.light": "#0d5039" }
+      },
+      "bg-hover": {
+        "$value": "#16221c",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-affirm-bg-hover", "mob.theme.light": "#e0f2ea" }
+      },
+      "border-hover": {
+        "$value": "#2c4438",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-affirm-border-hover", "mob.theme.light": "#a5d5c0" }
+      }
+    },
+    "destroy": {
+      "$description": "Muted action tone for destructive. Same contract as affirm: readable intent at rest, saturation on hover only.",
+      "fg": {
+        "$value": "#c08b8b",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-destroy-fg", "mob.theme.light": "#9c3b38" }
+      },
+      "bg": {
+        "$value": "#1a1315",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-destroy-bg", "mob.theme.light": "#fdf0ef" }
+      },
+      "border": {
+        "$value": "#35262a",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-destroy-border", "mob.theme.light": "#f0cfcd" }
+      },
+      "fg-hover": {
+        "$value": "#dc9d9d",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-destroy-fg-hover", "mob.theme.light": "#7f2b28" }
+      },
+      "bg-hover": {
+        "$value": "#221a1c",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-destroy-bg-hover", "mob.theme.light": "#fbe5e3" }
+      },
+      "border-hover": {
+        "$value": "#483035",
+        "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-destroy-border-hover", "mob.theme.light": "#e6b8b5" }
+      }
+    },
+    "series": {
+      "$description": "Categorical ramp for charts, composition bars and entity accents. Hue-spaced on one luminance tier so no series out-shouts another. 1/2/3 are measured; 4-8 extend the ramp.",
+      "1": { "$value": "#4f7bd6", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-1" } },
+      "2": { "$value": "#2dd4bf", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-2" } },
+      "3": { "$value": "#6d4df0", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-3" } },
+      "4": { "$value": "#fbbf24", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-4" } },
+      "5": { "$value": "#f87171", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-5" } },
+      "6": { "$value": "#34d399", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-6" } },
+      "7": { "$value": "#f0a3d0", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-7" } },
+      "8": { "$value": "#8f959e", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-8" } }
+    },
+    "series-tint": {
+      "$description": "Fill behind an entity glyph. Pairs 1:1 with color.series and with color.series-glyph. Re-themed in light mode.",
+      "1": { "$value": "#1b2c4a", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-1-tint", "mob.theme.light": "#dfe9fb" } },
+      "2": { "$value": "#12403c", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-2-tint", "mob.theme.light": "#d5f4ef" } },
+      "3": { "$value": "#211a3d", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-3-tint", "mob.theme.light": "#e5dffb" } },
+      "4": { "$value": "#2b1f06", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-4-tint", "mob.theme.light": "#fbeed0" } },
+      "5": { "$value": "#2a1416", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-5-tint", "mob.theme.light": "#fbdedd" } },
+      "6": { "$value": "#0d2a20", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-6-tint", "mob.theme.light": "#d6f2e6" } },
+      "7": { "$value": "#33162a", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-7-tint", "mob.theme.light": "#fbe0f0" } },
+      "8": { "$value": "#212429", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-8-tint", "mob.theme.light": "#e8eaee" } }
+    },
+    "series-glyph": {
+      "$description": "Letter/icon colour on the matching series tint.",
+      "1": { "$value": "#9db8e8", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-1-glyph", "mob.theme.light": "#24549f" } },
+      "2": { "$value": "#7fe6d5", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-2-glyph", "mob.theme.light": "#0d6a5e" } },
+      "3": { "$value": "#c4b5fd", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-series-3-glyph", "mob.theme.light": "#4a27b8" } },
+      "4": { "$value": "#fcd34d", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-4-glyph", "mob.theme.light": "#8a5a00" } },
+      "5": { "$value": "#fca5a5", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-5-glyph", "mob.theme.light": "#a83430" } },
+      "6": { "$value": "#6ee7b7", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-6-glyph", "mob.theme.light": "#0a6a4b" } },
+      "7": { "$value": "#f5bde0", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-7-glyph", "mob.theme.light": "#a3357a" } },
+      "8": { "$value": "#b4bac2", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-series-8-glyph", "mob.theme.light": "#4d535c" } }
+    },
+    "white": {
+      "$description": "Alpha ladder. Prefer these over new opaque greys for overlays, scrims and borders that must sit on an unknown surface.",
+      "04": { "$value": "rgba(255,255,255,.04)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-04" } },
+      "06": { "$value": "rgba(255,255,255,.06)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-06" } },
+      "08": { "$value": "rgba(255,255,255,.08)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-08" } },
+      "12": { "$value": "rgba(255,255,255,.12)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-12" } },
+      "16": { "$value": "rgba(255,255,255,.16)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-16" } },
+      "24": { "$value": "rgba(255,255,255,.24)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-24" } },
+      "40": { "$value": "rgba(255,255,255,.40)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-40" } },
+      "64": { "$value": "rgba(255,255,255,.64)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-64" } },
+      "80": { "$value": "rgba(255,255,255,.80)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-white-80" } }
+    },
+    "black": {
+      "24": { "$value": "rgba(0,0,0,.24)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-black-24" } },
+      "40": { "$value": "rgba(0,0,0,.40)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-black-40" } },
+      "64": { "$value": "rgba(0,0,0,.64)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-black-64" } },
+      "80": { "$value": "rgba(0,0,0,.80)", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-black-80" } }
+    }
+  },
+
+  "font": {
+    "family": {
+      "$type": "fontFamily",
+      "$description": "The dual-family split IS the identity of this system. Mono for every number, control label, tag and piece of metadata; sans for headings and hero figures only, always 600 / -0.02em. Do not set body copy in mono at paragraph length; do not set a metric in sans below 16px.",
+      "mono": {
+        "$value": ["IBM Plex Mono", "ui-monospace", "SFMono-Regular", "Menlo", "monospace"],
+        "$extensions": {
+          "mob.provenance": "src",
+          "mob.cssVar": "--mob-font-mono",
+          "mob.cssValue": "'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace"
+        }
+      },
+      "sans": {
+        "$value": ["-apple-system", "BlinkMacSystemFont", "system-ui", "Segoe UI", "Inter", "sans-serif"],
+        "$extensions": {
+          "mob.provenance": "src",
+          "mob.cssVar": "--mob-font-sans",
+          "mob.cssValue": "-apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Inter, sans-serif"
+        }
+      }
+    },
+    "weight": {
+      "$type": "fontWeight",
+      "regular": { "$value": 400, "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-weight-regular" } },
+      "medium": { "$value": 500, "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-weight-medium" } },
+      "semibold": { "$value": 600, "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-weight-semibold" } }
+    },
+    "size": {
+      "$type": "dimension",
+      "$description": "Every step through 27px is measured off a real high-density product surface — not a rounded ideal, which is why half-pixel steps exist. Steps at and above 32px extend the same sans-600/-0.02em logic upward for marketing surfaces the handoff never covered.",
+      "3xs": { "$value": "9.5px", "$description": "Uppercase micro-label.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-3xs" } },
+      "2xs": { "$value": "10px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-2xs" } },
+      "xs": { "$value": "10.5px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-xs" } },
+      "sm": { "$value": "11.5px", "$description": "Control label.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-sm" } },
+      "md": { "$value": "12px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-md" } },
+      "base": { "$value": "12.5px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-base" } },
+      "lg": { "$value": "13px", "$description": "Body default.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-lg" } },
+      "xl": { "$value": "14px", "$description": "Section title, primary value.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-xl" } },
+      "2xl": { "$value": "14.5px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-2xl" } },
+      "3xl": { "$value": "16px", "$description": "Floor for a figure set in sans.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-3xl" } },
+      "4xl": { "$value": "18px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-size-4xl" } },
+      "5xl": { "$value": "22px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-5xl" } },
+      "6xl": { "$value": "23px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-6xl" } },
+      "7xl": { "$value": "27px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-size-7xl" } },
+      "8xl": { "$value": "32px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-size-8xl" } },
+      "9xl": { "$value": "40px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-size-9xl" } },
+      "10xl": { "$value": "48px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-size-10xl" } },
+      "11xl": { "$value": "64px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-size-11xl" } },
+      "12xl": { "$value": "80px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-size-12xl" } }
+    },
+    "leading": {
+      "$type": "number",
+      "$description": "Unitless. The prototype sets no explicit line-height, so every step here is derived; the values encode the rhythm the measured layout implies rather than a value read off it.",
+      "display": { "$value": 1.0, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-leading-display", "mob.cssValue": "1.0" } },
+      "tight": { "$value": 1.15, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-leading-tight" } },
+      "snug": { "$value": 1.3, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-leading-snug" } },
+      "normal": { "$value": 1.45, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-leading-normal" } },
+      "relaxed": { "$value": 1.6, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-leading-relaxed" } },
+      "flat": { "$value": 1, "$description": "Single-line controls, where the box height is the control height.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-leading-flat" } }
+    },
+    "tracking": {
+      "$type": "dimension",
+      "label": { "$value": "0.7px", "$description": "Uppercase micro-labels.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-tracking-label" } },
+      "tight": { "$value": "-0.02em", "$description": "Sans headings and hero figures. Non-negotiable pairing: sans 600 always carries this.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-tracking-tight" } },
+      "normal": { "$value": "0", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-tracking-normal" } }
+    }
+  },
+
+  "space": {
+    "$type": "dimension",
+    "$description": "Public layout scale. Component-internal padding that does not land on this scale lives in tier 3 rather than polluting it. Steps up to 20px appear in the measured surface; 24 and above extend the scale for section rhythm the handoff never covered.",
+    "0": { "$value": "0", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-0" } },
+    "2": { "$value": "2px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-2" } },
+    "3": { "$value": "3px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-3" } },
+    "4": { "$value": "4px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-4" } },
+    "6": { "$value": "6px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-6" } },
+    "8": { "$value": "8px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-8" } },
+    "10": { "$value": "10px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-10" } },
+    "12": { "$value": "12px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-12" } },
+    "14": { "$value": "14px", "$description": "Default stack gap.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-14" } },
+    "16": { "$value": "16px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-16" } },
+    "20": { "$value": "20px", "$description": "Default grid gap.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-space-20" } },
+    "24": { "$value": "24px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-24" } },
+    "32": { "$value": "32px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-32" } },
+    "40": { "$value": "40px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-40" } },
+    "48": { "$value": "48px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-48" } },
+    "64": { "$value": "64px", "$description": "Default section gap.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-64" } },
+    "80": { "$value": "80px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-80" } },
+    "96": { "$value": "96px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-96" } },
+    "128": { "$value": "128px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-space-128" } }
+  },
+
+  "radius": {
+    "$type": "dimension",
+    "$description": "Keyed to control size, not to taste. The 8/9/10 triple is deliberate: radius tracks control height so an S and an L button read as the same family rather than as two different shapes.",
+    "2xs": { "$value": "3px", "$description": "Bars, bins, sparkline caps.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-radius-2xs" } },
+    "xs": { "$value": "6px", "$description": "Chips, badges.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-radius-xs" } },
+    "sm": { "$value": "8px", "$description": "Control S.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-radius-sm" } },
+    "md": { "$value": "9px", "$description": "Control M.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-radius-md" } },
+    "lg": { "$value": "10px", "$description": "Control L, inner tiles.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-radius-lg" } },
+    "xl": { "$value": "12px", "$description": "Cards, panels, modals.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-radius-xl" } },
+    "2xl": { "$value": "16px", "$description": "Marketing surfaces.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-radius-2xl" } },
+    "3xl": { "$value": "24px", "$description": "Hero media.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-radius-3xl" } },
+    "full": { "$value": "999px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-radius-full" } }
+  },
+
+  "border-width": {
+    "$type": "dimension",
+    "default": { "$value": "1px", "$description": "Every border in the system. Depth comes from surface plus a 1px border, never from a drop shadow.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-border-width" } },
+    "strong": { "$value": "2px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-border-width-strong" } },
+    "hairline": { "$value": "1px", "$description": "Width of the GAP between fused segments, painted by the frame-coloured parent. Not a border.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-hairline" } }
+  },
+
+  "duration": {
+    "$type": "duration",
+    "$description": "The handoff states a motion policy in prose — transform/opacity only, 100-200ms, no bounce — rather than naming values. fast and normal sit inside that window; the other three extend it for micro-feedback and overlay entrances.",
+    "instant": { "$value": "80ms", "$description": "Below the stated window: colour/opacity micro-feedback only.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-duration-instant" } },
+    "fast": { "$value": "120ms", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-duration-fast" } },
+    "normal": { "$value": "160ms", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-duration-normal" } },
+    "slow": { "$value": "220ms", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-duration-slow" } },
+    "enter": { "$value": "260ms", "$description": "Overlay entrance. Above the stated window; exits stay faster than entrances.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-duration-enter" } }
+  },
+
+  "ease": {
+    "$type": "cubicBezier",
+    "$description": "Derived: the prototype declares durations by prose and never names a curve. No overshoot in any of them — the no-bounce rule is enforced by the curve, not by review.",
+    "standard": { "$value": [0.2, 0, 0, 1], "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-ease-standard", "mob.cssValue": "cubic-bezier(.2, 0, 0, 1)" } },
+    "enter": { "$value": [0.16, 1, 0.3, 1], "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-ease-enter", "mob.cssValue": "cubic-bezier(.16, 1, .3, 1)" } },
+    "exit": { "$value": [0.4, 0, 1, 1], "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-ease-exit", "mob.cssValue": "cubic-bezier(.4, 0, 1, 1)" } }
+  },
+
+  "motion": {
+    "press-scale": {
+      "$type": "number",
+      "$value": 0.985,
+      "$description": "The only transform a control applies on :active. Deliberately shallow — at this size a deeper press reads as a bug.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-press-scale", "mob.cssValue": ".985" }
+    }
+  },
+
+  "layout": {
+    "$type": "dimension",
+    "container-app": { "$value": "1460px", "$description": "Dense product shell.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-container-app" } },
+    "container-content": { "$value": "1280px", "$description": "Marketing / editorial.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-container-content" } },
+    "container-prose": { "$value": "68ch", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-container-prose" } },
+    "gutter-desktop": { "$value": "26px", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-gutter-desktop" } },
+    "gutter-tablet": { "$value": "20px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-gutter-tablet" } },
+    "gutter-mobile": { "$value": "16px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-gutter-mobile" } },
+    "rail-width": { "$value": "288px", "$description": "Fixed side rail.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-rail-width" } },
+    "header-row-h": { "$value": "34px", "$description": "Column header baseline. Every column opens with this height so the first card in each starts on the same line.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-header-row-h" } }
+  },
+
+  "breakpoint": {
+    "$type": "dimension",
+    "$description": "Derived. The handoff is a single desktop capture; these are the conventional stops, chosen so the density zones and the mobile rhythm override in tokens.css have somewhere to hang.",
+    "sm": { "$value": "640px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-bp-sm" } },
+    "md": { "$value": "768px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-bp-md" } },
+    "lg": { "$value": "1024px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-bp-lg" } },
+    "xl": { "$value": "1280px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-bp-xl" } },
+    "2xl": { "$value": "1536px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-bp-2xl" } }
+  },
+
+  "z": {
+    "$type": "number",
+    "$description": "Derived. Gaps of 100 between layers leave room for a product's own intermediate layer without renumbering the system.",
+    "base": { "$value": 0, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-base" } },
+    "raised": { "$value": 10, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-raised" } },
+    "sticky": { "$value": 100, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-sticky" } },
+    "dropdown": { "$value": 200, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-dropdown" } },
+    "popover": { "$value": 300, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-popover" } },
+    "modal-backdrop": { "$value": 400, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-modal-backdrop" } },
+    "modal": { "$value": 410, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-modal" } },
+    "toast": { "$value": 500, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-toast" } },
+    "tooltip": { "$value": 600, "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-z-tooltip" } }
+  }
+}

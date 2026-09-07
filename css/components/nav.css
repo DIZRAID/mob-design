@@ -1,0 +1,1115 @@
+/* =============================================================================
+   mob-design — navigation
+   navbar · navlink · sidebar · tabs · breadcrumbs
+   -----------------------------------------------------------------------------
+   Four navigation surfaces, one grammar. They share a rest tone (muted), a hover
+   tone (primary), --mob-focus-ring, and the press scale from tokens.css. Every
+   interactive selector here states its own :focus-visible rather than leaning on
+   the base.css contract, because that contract also stamps --mob-radius-sm on
+   whatever it lands on: a crumb (xs) and a pill (full) would both square off to
+   8px on tab. What differs between the four is how "you are here" is drawn — that
+   difference is deliberate, because two navigation layers stacked on one screen
+   must not signal current-ness the same way:
+
+       navbar     current = a quiet wash + primary text        (never an underline)
+       sidebar    current = a quiet wash + an inline-start accent marker
+       tabs       current = an indicator (underline bar / plate)
+       breadcrumbs current = plain text, not a link at all
+
+   A navbar that underlines its current item competes with the tab strip below
+   it; a sidebar that fills every row with an accent pill turns navigation into a
+   wall of CTAs. Both are explicitly ruled out in the mobb spec (§4.14, §4.15).
+
+   ANATOMY
+   -------
+   .mob-navbar                     full-bleed bar: surface, hairline, sticky
+   ├── .mob-navbar__inner          max-width container, one flex row
+   │   ├── .mob-navbar__brand      mark + wordmark (sans 600, the only sans here)
+   │   │   └── .mob-navbar__mark   optional logo box
+   │   ├── .mob-navbar__nav        <ul> of .mob-navlink            (hidden < md)
+   │   │   └── .mob-navlink        └── .mob-navlink__icon  optional leading slot
+   │   ├── .mob-navbar__spacer     flex:1 — the ONLY flexible child   [src]
+   │   ├── .mob-navbar__actions    secondary controls
+   │   ├── .mob-navbar__account    account / wallet slot
+   │   └── .mob-navbar__toggle     menu trigger, [aria-expanded]     (shown < md)
+   │       └── .mob-navbar__toggle-icon   CSS-drawn glyph, morphs to a close mark
+   └── .mob-navbar__drawer         mobile panel, [data-mob-open]
+       ├── .mob-navbar__drawer-label     section heading
+       ├── .mob-navbar__drawer-divider   hairline seam
+       └── .mob-navlink                  full-width, touch-sized rows
+
+   .mob-sidebar
+   ├── .mob-sidebar__header
+   ├── .mob-sidebar__group
+   │   ├── .mob-sidebar__group-label
+   │   └── .mob-sidebar__item          <a> or <button>
+   │       ├── ::before                inline-start marker: current | pending
+   │       ├── .mob-sidebar__icon      optional leading slot
+   │       ├── .mob-sidebar__label
+   │       └── .mob-sidebar__badge     optional trailing count / status
+   └── .mob-sidebar__footer
+       └── .mob-sidebar__toggle        collapse trigger, [aria-expanded]
+
+   .mob-tabs[role=tablist]
+   └── .mob-tab[role=tab][aria-selected]
+       ├── ::before                    the indicator — bar or plate
+       ├── .mob-tab__label
+       └── .mob-tab__count
+
+   .mob-breadcrumbs  (<nav><ol>)
+   └── .mob-breadcrumbs__item (<li>)   separator drawn by ::after
+       ├── .mob-breadcrumbs__icon      optional leading mark on the first crumb
+       └── .mob-breadcrumbs__link      last item is a <span aria-current="page">
+
+   STATES SHIPPED  (mobb spec §25; "—" means the state has no meaning here)
+   ------------------------------------------------------------------------
+                     default hover focus pressed selected disabled loading error
+     navlink            ✓     ✓     ✓      ✓        ✓        ✓       ✓      —
+     sidebar item       ✓     ✓     ✓      ✓        ✓        ✓       ✓      —
+     tab                ✓     ✓     ✓      ✓        ✓        ✓      list-level —
+     breadcrumb link    ✓     ✓     ✓      ✓        —        —       —      —
+
+   Error is not a navigation state: the surface that failed to load owns the
+   error, the nav that points at it does not. Loading IS a navigation state —
+   a pending route — and is drawn without ever changing an element's size.
+
+   CONSUMER RULES
+   --------------
+   1. Current page: `aria-current="page"` on the link. Never a class. A tab uses
+      `aria-selected="true"`; a disabled item uses `aria-disabled="true"` (or
+      `disabled` when it is a <button>).
+   2. Icon-only controls (toggle, collapsed sidebar rows) need `.mob-sr-only`
+      text or an `aria-label`. Collapsed rows also want a `title`.
+   3. `.mob-navbar--sticky` needs an opaque bar. Do not pair it with
+      `--transparent` unless the page also sets `[data-mob-scrolled]` from a
+      scroll listener — otherwise content scrolls under transparent glass.
+   4. Under a sticky navbar, set
+      `--mob-sidebar-sticky-offset: calc(var(--mob-navbar-h) + var(--mob-hairline))`
+      on `.mob-sidebar--sticky` so it docks below the bar. The hairline is part of
+      the bar's box at all times, so leaving it out docks the rail 1px high.
+   5. Tab variant: `--underline` is the dominant variant for this product. See
+      the TABS section before reaching for `--contained` or `--pill`.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS — GEOMETRY
+   Off-scale, calibrated or component-specific geometry. Nothing below this block
+   may inline a raw value. Colour-valued tokens are NOT here; see the next block.
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Navbar ------------------------------------------------------------ */
+  /* The INNER row height: control L (40px) + 8px block padding each side. The bar
+     itself measures one hairline more, because the scrolled-state border is
+     reserved in the box at all times (see .mob-navbar). Offset a sticky sidebar
+     by calc(var(--mob-navbar-h) + var(--mob-hairline)) if you need it flush. */
+  --mob-navbar-h:          56px;                     /* [drv] */
+  --mob-navbar-h-compact:  48px;                     /* [drv] dense product shell */
+  --mob-navbar-px:         var(--mob-gutter-desktop);/* [src] 26px page gutter */
+  --mob-navbar-max-w:      var(--mob-container-app);
+  --mob-navbar-gap:        var(--mob-space-20);      /* [drv] between bar slots */
+  --mob-navbar-nav-gap:    var(--mob-space-2);       /* [drv] links carry their own padding */
+  --mob-navbar-actions-gap:var(--mob-control-gap);   /* [src] 6px action stack */
+  --mob-navbar-brand-size: var(--mob-size-xl);       /* [src] 14px sans 600, same as .mob-title */
+  --mob-navbar-mark-size:  var(--mob-control-icon-lg);
+  --mob-navbar-toggle-size:var(--mob-control-h-md);
+  --mob-navbar-toggle-radius: var(--mob-radius-sm);
+  --mob-navbar-toggle-bar-h:  1.5px;                 /* [drv] hamburger stroke */
+  --mob-navbar-toggle-bar-gap:3px;                   /* [drv] offset from centre */
+  --mob-navbar-drawer-shift:  6px;                   /* [drv] enter translate, within the 4-8px rule */
+
+  /* --- Navlink ----------------------------------------------------------- */
+  --mob-navlink-h:      var(--mob-control-h-sm);
+  --mob-navlink-px:     var(--mob-control-px-sm);
+  --mob-navlink-radius: var(--mob-radius-sm);
+  --mob-navlink-size:   var(--mob-size-md);          /* mono 12px — a control label, not body copy */
+
+  /* --- Sidebar ----------------------------------------------------------- */
+  --mob-sidebar-w:            240px;                 /* [drv] labels only — the 288px rail carries data, this does not */
+  --mob-sidebar-w-collapsed:  56px;                  /* [drv] icon box + rail padding */
+  --mob-sidebar-px:           var(--mob-space-10);
+  --mob-sidebar-py:           var(--mob-space-12);
+  --mob-sidebar-group-gap:    var(--mob-space-2);    /* between rows */
+  --mob-sidebar-section-gap:  var(--mob-space-20);   /* between groups */
+  --mob-sidebar-item-h:       var(--mob-control-h-sm);
+  --mob-sidebar-item-px:      var(--mob-space-10);
+  --mob-sidebar-item-gap:     var(--mob-space-8);
+  --mob-sidebar-item-radius:  var(--mob-radius-sm);
+  --mob-sidebar-item-size:    var(--mob-size-md);
+  --mob-sidebar-marker-w:     var(--mob-border-width-strong);
+  --mob-sidebar-marker-h:     14px;                  /* [drv] short enough to clear the row's 8px corners */
+  --mob-sidebar-sticky-offset: var(--mob-space-0);
+
+  /* --- Tabs -------------------------------------------------------------- */
+  --mob-tab-h:        var(--mob-header-row-h);       /* [src] 34px — the column-header baseline */
+  --mob-tab-px:       var(--mob-space-10);
+  --mob-tab-gap:      var(--mob-space-2);
+  --mob-tab-size:     var(--mob-size-lg);            /* mono 13px */
+  --mob-tab-radius:   var(--mob-radius-sm);
+  --mob-tab-bar-h:    var(--mob-border-width-strong);/* the underline indicator */
+  /* 34 tab + 2 + 2 padding + 1 + 1 border = 40 = control L exactly, so a
+     contained strip and a Button L in the same toolbar row are the same height.
+     Count the border: at 3px padding the strip is 42 and sits 2px proud, which
+     is precisely the "random 1px difference between same-size controls" the
+     anti-pattern list rules out. */
+  --mob-tabs-trough-pad: var(--mob-space-2);         /* [drv] */
+  --mob-tabs-fade:    var(--mob-space-24);           /* [drv] edge fade width on --scroll */
+  /* Indicator mechanics. The scale pair is the tab equivalent of --mob-press-scale:
+     a settle, never a pop — both stay far below the 1.02 ceiling. The paint depth
+     is local to the tab's own stacking context (isolation: isolate) and is NOT a
+     stacking layer, which is why it is not on the --mob-z-* scale. */
+  --mob-tab-indicator-z:          -1;                /* [drv] */
+  --mob-tab-indicator-scale-rest: .96;               /* [drv] plate variants */
+  --mob-tab-bar-scale-rest:       .4;                /* [drv] underline variant */
+  --mob-tabs-loading-bar-w:       20%;               /* [drv] paired with the 500% sweep in @keyframes mob-tabs-loading */
+  /* The loading bar is anchored with inset-inline-start but swept with a
+     transform, and a transform has no logical axis. This is the sign that gives
+     translateX an inline direction; the [dir='rtl'] rule beside the keyframes
+     flips it. Without it the bar starts inside an RTL track and exits at once. */
+  --mob-nav-sweep-dir:            1;                 /* [drv] 1 = ltr, -1 = rtl */
+
+  /* --- Breadcrumbs -------------------------------------------------------- */
+  --mob-breadcrumbs-gap:        var(--mob-space-6);
+  --mob-breadcrumbs-size:       var(--mob-size-sm);  /* mono 11.5px — metadata */
+  --mob-breadcrumbs-radius:     var(--mob-radius-xs);
+  --mob-breadcrumbs-item-max-w: 22ch;                /* [drv] truncate, never wrap a crumb */
+  --mob-breadcrumbs-separator:  '/';                 /* RTL products may prefer '\\' or '‹' */
+
+  /* --- Ambient loops ------------------------------------------------------
+     The duration scale stops at 260ms because it covers state transitions, not
+     ambient loops. These two are the only loops navigation owns. */
+  --mob-nav-pending-cycle:  1400ms;                  /* [drv] */
+  --mob-tabs-loading-cycle: 1200ms;                  /* [drv] */
+}
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS — COLOUR
+   Separate from geometry, and matched on [data-mob-theme] as well as :root, for
+   a reason worth knowing: a custom property is substituted where it is DECLARED,
+   not where it is used. A wash declared only on :root would bake in the dark
+   accent and then keep it inside a nested <div data-mob-theme="light"> — the
+   scope would flip its text and surfaces but not this component's washes. Listing
+   the theme attribute makes every theme scope, nested or not, re-derive them.
+   (tokens.css does the same thing by hand for --mob-selection-bg and
+   --mob-glow-accent; this is that rule applied to a component.)
+
+   The washes are alpha, never opaque greys: one navlink sits on the canvas, on
+   the scrolled bar surface and in the drawer, and must read the same on all three.
+   -------------------------------------------------------------------------- */
+:root,
+[data-mob-theme] {
+  --mob-navbar-bg: var(--mob-bg-canvas);
+  /* Scrolled: one third of a surface step. Enough to detach the bar from the
+     page, not enough to read as a new panel. Depth is surface + hairline; the
+     bar never grows a shadow. */
+  --mob-navbar-bg-scrolled: color-mix(in srgb, var(--mob-bg-surface) 72%, var(--mob-bg-canvas)); /* [drv] */
+
+  /* Current page reads as a 15% accent wash under PRIMARY text. It is not
+     fg-on-accent on a solid fill — that is the primary button, and the mobb spec
+     forbids nav items that look like CTAs. For scale: composited on the canvas
+     this lands quieter than --mob-accent-tint, the calibrated avatar tint. */
+  --mob-navlink-bg-hover:         color-mix(in srgb, var(--mob-fg-primary) 6%, transparent);  /* [drv] */
+  --mob-navlink-bg-current:       color-mix(in srgb, var(--mob-accent) 15%, transparent);     /* [drv] */
+  --mob-navlink-bg-current-hover: color-mix(in srgb, var(--mob-accent) 21%, transparent);     /* [drv] */
+
+  /* The sidebar spends no accent on its row fill — the marker carries the signal,
+     so the wash only has to stop the current row from floating. */
+  --mob-sidebar-bg:         transparent;             /* the rail borrows the page surface by default */
+  --mob-sidebar-bg-hover:   color-mix(in srgb, var(--mob-fg-primary) 4%, transparent);  /* [drv] */
+  --mob-sidebar-bg-current: color-mix(in srgb, var(--mob-fg-primary) 8%, transparent);  /* [drv] */
+
+  --mob-tabs-bg-hover:    color-mix(in srgb, var(--mob-fg-primary) 5%, transparent);   /* [drv] */
+  --mob-tabs-bg-selected: color-mix(in srgb, var(--mob-accent) 15%, transparent);      /* [drv] pill only */
+}
+
+/* =============================================================================
+   NAVBAR
+   ============================================================================= */
+.mob-navbar {
+  position: relative;                 /* the drawer anchors to the bar */
+  background: var(--mob-navbar-bg);
+  color: var(--mob-fg-primary);
+  /* The hairline is always in the box, transparent at rest. Scrolling paints it
+     rather than adding it, so [data-mob-scrolled] can never shift the page 1px. */
+  border-block-end: var(--mob-hairline) solid transparent;
+  transition:
+    background-color var(--mob-duration-normal) var(--mob-ease-standard),
+    border-color var(--mob-duration-normal) var(--mob-ease-standard);
+}
+
+.mob-navbar__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-navbar-gap);
+  block-size: var(--mob-navbar-h);
+  max-inline-size: var(--mob-navbar-max-w);
+  margin-inline: auto;
+  padding-inline: var(--mob-navbar-px);
+}
+
+/* Sticky is opt-in, per mobb spec §4.14 ("only if source behavior supports it"). */
+.mob-navbar--sticky {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--mob-z-sticky);
+}
+
+/* Scrolled: a denser surface and the hairline. Restrained on purpose — the bar
+   does not shrink, blur, or lift. */
+.mob-navbar[data-mob-scrolled] {
+  background: var(--mob-navbar-bg-scrolled);
+  border-block-end-color: var(--mob-border-frame);
+}
+
+/* Over a hero. Becomes opaque the moment the page scrolls. */
+.mob-navbar--transparent { --mob-navbar-bg: transparent; }
+
+/* Always-on hairline, for a bar that separates two static regions. */
+.mob-navbar--bordered { border-block-end-color: var(--mob-border-frame); }
+
+/* Editorial / marketing shell instead of the dense app shell. */
+.mob-navbar--content { --mob-navbar-max-w: var(--mob-container-content); }
+.mob-navbar--compact { --mob-navbar-h: var(--mob-navbar-h-compact); }
+
+/* --- Brand ----------------------------------------------------------------
+   The one place sans 600 appears in the bar. Everything else is mono. */
+.mob-navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mob-control-gap);
+  flex: 0 0 auto;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-navbar-brand-size);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  line-height: var(--mob-leading-flat);
+  color: var(--mob-fg-primary);
+  text-decoration: none;
+  transition: transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+/* No hover colour: the wordmark is an identity, not a link that lights up. */
+.mob-navbar__brand:hover { color: var(--mob-fg-primary); }
+.mob-navbar__brand:active { transform: scale(var(--mob-press-scale)); }
+/* The brand is a link, so it states its own ring rather than inheriting base.css
+   by accident. Radius matches what the global contract already applies, so this
+   is a declaration of intent, not a visual change. */
+.mob-navbar__brand:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-radius-sm);
+}
+
+.mob-navbar__mark {
+  inline-size: var(--mob-navbar-mark-size);
+  block-size: var(--mob-navbar-mark-size);
+  flex: 0 0 auto;
+  border-radius: var(--mob-radius-xs);
+  color: var(--mob-accent-bright);
+}
+
+/* --- Slots ---------------------------------------------------------------- */
+.mob-navbar__nav {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-navbar-nav-gap);
+  min-inline-size: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* <li> wrappers are optional. When they are present they carry no layout of
+   their own — the links are the flex children. Give them role="presentation"
+   if the list is not announced as a list. */
+.mob-navbar__nav > li { display: contents; }
+
+/* The spacer is the only flexible child — actions and account keep their
+   intrinsic size, exactly as the handoff's header row does. [src] */
+.mob-navbar__spacer { flex: 1 1 auto; min-inline-size: 0; }
+
+.mob-navbar__actions,
+.mob-navbar__account {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-navbar-actions-gap);
+  flex: 0 0 auto;
+}
+/* __account is a slot, not a control. Put a button, menu trigger or wallet chip
+   inside it; do not style the slot itself as if it were clickable. */
+
+/* --- Menu trigger ---------------------------------------------------------
+   Hidden above md. The glyph is drawn in CSS so navigation carries no icon
+   dependency, and it morphs to a close mark with transform only. */
+.mob-navbar__toggle {
+  display: none;
+  place-items: center;
+  flex: 0 0 auto;
+  inline-size: var(--mob-navbar-toggle-size);
+  block-size: var(--mob-navbar-toggle-size);
+  border: var(--mob-border-width) solid var(--mob-border-control);
+  border-radius: var(--mob-navbar-toggle-radius);
+  background: transparent;
+  color: var(--mob-fg-muted);
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-navbar__toggle:hover {
+  color: var(--mob-fg-primary);
+  background: var(--mob-navlink-bg-hover);
+  border-color: var(--mob-border-hover);
+}
+.mob-navbar__toggle:active { transform: scale(var(--mob-press-scale)); }
+.mob-navbar__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-navbar-toggle-radius);
+}
+.mob-navbar__toggle[aria-expanded='true'] {
+  color: var(--mob-fg-primary);
+  border-color: var(--mob-border-strong);
+}
+
+.mob-navbar__toggle-icon {
+  position: relative;
+  display: block;
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+}
+.mob-navbar__toggle-icon::before,
+.mob-navbar__toggle-icon::after {
+  content: '';
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 50%;
+  block-size: var(--mob-navbar-toggle-bar-h);
+  border-radius: var(--mob-radius-full);
+  background: currentColor;
+  transition: transform var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-navbar__toggle-icon::before { transform: translateY(calc(-50% - var(--mob-navbar-toggle-bar-gap))); }
+.mob-navbar__toggle-icon::after  { transform: translateY(calc(-50% + var(--mob-navbar-toggle-bar-gap))); }
+.mob-navbar__toggle[aria-expanded='true'] .mob-navbar__toggle-icon::before { transform: translateY(-50%) rotate(45deg); }
+.mob-navbar__toggle[aria-expanded='true'] .mob-navbar__toggle-icon::after  { transform: translateY(-50%) rotate(-45deg); }
+
+/* --- Mobile drawer --------------------------------------------------------
+   A panel docked under the bar, not a side sheet: no scrim, no page lock. It
+   enters with opacity + a 6px translate (mobb spec §6, dropdown motion) and
+   never animates its height, so a long menu cannot judder the page. */
+.mob-navbar__drawer {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 100%;
+  z-index: var(--mob-z-dropdown);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-navbar-nav-gap);
+  max-block-size: calc(100dvh - var(--mob-navbar-h));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--mob-space-10) var(--mob-navbar-px) var(--mob-space-16);
+  background: var(--mob-bg-elevated);
+  border-block-end: var(--mob-hairline) solid var(--mob-border-frame);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(calc(var(--mob-navbar-drawer-shift) * -1));
+  transition:
+    opacity var(--mob-duration-fast) var(--mob-ease-exit),
+    transform var(--mob-duration-fast) var(--mob-ease-exit),
+    visibility 0s linear var(--mob-duration-fast);
+}
+.mob-navbar__drawer[data-mob-open] {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity var(--mob-duration-normal) var(--mob-ease-enter),
+    transform var(--mob-duration-normal) var(--mob-ease-enter),
+    visibility 0s;
+}
+/* Drawer rows are full-width and touch-sized; the bar's compact rhythm does not
+   survive the move to a phone. */
+.mob-navbar__drawer .mob-navlink {
+  inline-size: 100%;
+  justify-content: start;
+  --mob-navlink-h: var(--mob-control-h-lg);
+  --mob-navlink-px: var(--mob-space-12);
+}
+.mob-navbar__drawer-label {
+  margin-block: var(--mob-space-10) var(--mob-space-4);
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  text-transform: uppercase;
+  color: var(--mob-fg-label);
+}
+.mob-navbar__drawer-divider {
+  block-size: var(--mob-hairline);
+  margin-block: var(--mob-space-8);
+  background: var(--mob-border-subtle);
+}
+
+/* =============================================================================
+   NAVLINK
+   Muted at rest, primary on hover, current via [aria-current="page"].
+   No underline in any state — see the file header for why.
+   ============================================================================= */
+.mob-navlink {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mob-control-gap);
+  block-size: var(--mob-navlink-h);
+  padding-inline: var(--mob-navlink-px);
+  border-radius: var(--mob-navlink-radius);
+  background: transparent;
+  color: var(--mob-fg-muted);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-navlink-size);
+  line-height: var(--mob-leading-flat);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-navlink:hover {
+  color: var(--mob-fg-primary);
+  background: var(--mob-navlink-bg-hover);
+}
+.mob-navlink:active { transform: scale(var(--mob-press-scale)); }
+/* base.css rounds every focused box to --mob-radius-sm; a navlink is already
+   that radius, so restating it costs nothing and stops the ring drifting if
+   --mob-navlink-radius is ever retuned. */
+.mob-navlink:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-navlink-radius);
+}
+
+/* Current page. A 15% accent wash under primary text — not a filled accent pill:
+   the text stays fg-primary rather than fg-on-accent precisely so the item reads
+   as "where you are", not "press me". */
+.mob-navlink[aria-current='page'] {
+  color: var(--mob-fg-primary);
+  background: var(--mob-navlink-bg-current);
+}
+.mob-navlink[aria-current='page']:hover { background: var(--mob-navlink-bg-current-hover); }
+
+/* Disabled: contrast down AND affordance gone — no wash, no pointer, no press. */
+.mob-navlink[aria-disabled='true'],
+.mob-navlink:disabled {
+  color: var(--mob-fg-disabled);
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+
+/* Pending route. The label does not move, resize, or disappear; a hairline at
+   the block edge pulses until the route resolves. It is fg-dim, never accent, so
+   it can never be mistaken for the current-page marker. */
+.mob-navlink[data-mob-loading] { cursor: progress; }
+.mob-navlink[data-mob-loading]::before {
+  content: '';
+  position: absolute;
+  inset-inline: var(--mob-navlink-px);
+  inset-block-end: var(--mob-space-4);
+  block-size: var(--mob-hairline);
+  background: var(--mob-fg-dim);
+  animation: mob-nav-pending var(--mob-nav-pending-cycle) var(--mob-ease-standard) infinite;
+}
+
+/* Icon slot: inherits the link's tone so hover moves both together. */
+.mob-navlink__icon {
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
+/* =============================================================================
+   SIDEBAR
+   Stable width, grouped sections, compact rows. The current row is a quiet
+   surface plus a 2px accent marker on the inline-start edge — NOT a filled
+   rounded pill (mobb spec §4.15). The marker is the signal; the wash only stops
+   the row from floating.
+   ============================================================================= */
+.mob-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-sidebar-section-gap);
+  inline-size: var(--mob-sidebar-w);
+  flex: 0 0 auto;
+  padding: var(--mob-sidebar-py) var(--mob-sidebar-px);
+  background: var(--mob-sidebar-bg);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.mob-sidebar--bordered { border-inline-end: var(--mob-border-width) solid var(--mob-border-default); }
+
+.mob-sidebar--sticky {
+  position: sticky;
+  inset-block-start: var(--mob-sidebar-sticky-offset);
+  block-size: calc(100dvh - var(--mob-sidebar-sticky-offset));
+}
+
+.mob-sidebar__header,
+.mob-sidebar__footer { flex: 0 0 auto; }
+.mob-sidebar__footer { margin-block-start: auto; padding-block-start: var(--mob-space-12); }
+
+.mob-sidebar__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-sidebar-group-gap);
+}
+
+/* Same role as .mob-label in base.css, restated so a group heading is correct
+   without the consumer remembering to add a second class. */
+.mob-sidebar__group-label {
+  padding-inline: var(--mob-sidebar-item-px);
+  margin-block-end: var(--mob-space-4);
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  text-transform: uppercase;
+  color: var(--mob-fg-label);
+}
+
+.mob-sidebar__item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--mob-sidebar-item-gap);
+  inline-size: 100%;
+  min-block-size: var(--mob-sidebar-item-h);
+  padding-inline: var(--mob-sidebar-item-px);
+  border-radius: var(--mob-sidebar-item-radius);
+  background: transparent;
+  color: var(--mob-fg-muted);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-sidebar-item-size);
+  line-height: var(--mob-leading-flat);
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* The marker. Always in the box, scaled to nothing until it is earned — so it
+   grows with transform rather than appearing and reflowing the row. */
+.mob-sidebar__item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-start: 50%;
+  inline-size: var(--mob-sidebar-marker-w);
+  block-size: var(--mob-sidebar-marker-h);
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-accent);
+  opacity: 0;
+  transform: translateY(-50%) scaleY(0);
+  transition:
+    transform var(--mob-duration-normal) var(--mob-ease-standard),
+    opacity var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+.mob-sidebar__item:hover {
+  color: var(--mob-fg-primary);
+  background: var(--mob-sidebar-bg-hover);
+}
+.mob-sidebar__item:active { transform: scale(var(--mob-press-scale)); }
+.mob-sidebar__item:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-sidebar-item-radius);
+}
+
+.mob-sidebar__item[aria-current='page'],
+.mob-sidebar__item[aria-current='true'] {
+  color: var(--mob-fg-primary);
+  background: var(--mob-sidebar-bg-current);
+}
+.mob-sidebar__item[aria-current='page']::before,
+.mob-sidebar__item[aria-current='true']::before {
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+}
+/* The current row does not brighten further on hover: it is already the loudest
+   row in the rail, and a second step just makes the list flicker under the mouse. */
+.mob-sidebar__item[aria-current='page']:hover,
+.mob-sidebar__item[aria-current='true']:hover { background: var(--mob-sidebar-bg-current); }
+
+.mob-sidebar__item[aria-disabled='true'],
+.mob-sidebar__item:disabled {
+  color: var(--mob-fg-disabled);
+  background: transparent;
+  cursor: default;
+  pointer-events: none;
+}
+.mob-sidebar__item[aria-disabled='true']::before,
+.mob-sidebar__item:disabled::before { opacity: 0; }
+
+/* Pending route: the marker slot is reused in fg-dim and pulses. Same geometry
+   as the current marker, different tone — so "loading" and "current" are never
+   confused, and nothing in the row moves. */
+.mob-sidebar__item[data-mob-loading] { cursor: progress; }
+.mob-sidebar__item[data-mob-loading]::before {
+  background: var(--mob-fg-dim);
+  opacity: 1;
+  transform: translateY(-50%) scaleY(1);
+  animation: mob-nav-pending var(--mob-nav-pending-cycle) var(--mob-ease-standard) infinite;
+}
+
+.mob-sidebar__icon {
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+  flex: 0 0 auto;
+  color: currentColor;
+}
+.mob-sidebar__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mob-sidebar__badge {
+  flex: 0 0 auto;
+  font-size: var(--mob-size-2xs);
+  color: var(--mob-fg-label);
+  font-variant-numeric: tabular-nums;
+}
+/* Tone the badge with the .mob-tone-* utilities from base.css — do not add
+   colour variants here. */
+
+/* --- Collapsible ----------------------------------------------------------
+   Collapse is a layout change, so it happens instantly: transitioning width is
+   forbidden by the motion policy, and a 200ms width tween would drag every row
+   of the app beside it. */
+.mob-sidebar--collapsible[data-mob-collapsed] {
+  inline-size: var(--mob-sidebar-w-collapsed);
+  --mob-sidebar-item-px: var(--mob-space-0);
+}
+.mob-sidebar--collapsible[data-mob-collapsed] .mob-sidebar__item { justify-content: center; }
+.mob-sidebar--collapsible[data-mob-collapsed] .mob-sidebar__label,
+.mob-sidebar--collapsible[data-mob-collapsed] .mob-sidebar__badge,
+.mob-sidebar--collapsible[data-mob-collapsed] .mob-sidebar__group-label { display: none; }
+/* With the group labels gone, groups need a seam. A hairline, not a gap — the
+   rail must not look like it lost a section. */
+.mob-sidebar--collapsible[data-mob-collapsed] .mob-sidebar__group + .mob-sidebar__group {
+  padding-block-start: var(--mob-space-12);
+  border-block-start: var(--mob-hairline) solid var(--mob-border-subtle);
+}
+/* A collapsed row is icon-only: it needs a title or aria-label to stay usable. */
+
+.mob-sidebar__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mob-sidebar-item-gap);
+  inline-size: 100%;
+  min-block-size: var(--mob-sidebar-item-h);
+  border-radius: var(--mob-sidebar-item-radius);
+  background: transparent;
+  color: var(--mob-fg-label);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-sm);
+  line-height: var(--mob-leading-flat);
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-sidebar__toggle:hover {
+  color: var(--mob-fg-primary);
+  background: var(--mob-sidebar-bg-hover);
+}
+.mob-sidebar__toggle:active { transform: scale(var(--mob-press-scale)); }
+.mob-sidebar__toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-sidebar-item-radius);
+}
+.mob-sidebar__toggle > svg {
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+  transition: transform var(--mob-duration-normal) var(--mob-ease-standard);
+}
+.mob-sidebar__toggle[aria-expanded='false'] > svg { transform: rotate(180deg); }
+[dir='rtl'] .mob-sidebar__toggle > svg { scale: -1 1; }
+
+/* =============================================================================
+   TABS
+   -----------------------------------------------------------------------------
+   THE DOMINANT VARIANT IS `--underline`. Use it unless you have a reason not to:
+   it is the only one that adds no surface, no border and no radius to the page,
+   which is what keeps a tab strip from reading as a row of independent buttons
+   (mobb spec §4.11). Reach for the others only when the strip must survive
+   without a baseline to sit on:
+
+     --contained  a segmented control inside a sunken trough. Use when the strip
+                  floats in a card header with no full-width edge to underline.
+     --pill       loose, standalone filters. The least tab-like of the three;
+                  do not use it for primary page-level navigation.
+
+   Tabs are never CTAs: no accent fill, no on-accent text, no border per tab. The
+   selected tab is marked by ONE indicator drawn in ::before, and it animates with
+   transform + opacity only. (::after belongs to base.css — it is the coarse-
+   pointer hit target. Do not claim it here.)
+   ============================================================================= */
+.mob-tabs {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--mob-tab-gap);
+  min-inline-size: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+/* Same as the navbar: optional <li> wrappers hold no layout. A tablist built
+   from a list needs role="presentation" on the items. */
+.mob-tabs > li { display: contents; }
+
+.mob-tab {
+  position: relative;
+  isolation: isolate;                 /* lets the indicator sit behind the label */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mob-control-gap);
+  flex: 0 0 auto;
+  block-size: var(--mob-tab-h);
+  padding-inline: var(--mob-tab-px);
+  background: transparent;
+  border: 0;
+  color: var(--mob-fg-muted);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-tab-size);
+  line-height: var(--mob-leading-flat);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* The indicator. One pseudo-element, three shapes, always present so that
+   selecting a tab is a transform, never an insertion. */
+.mob-tab::before {
+  content: '';
+  position: absolute;
+  z-index: var(--mob-tab-indicator-z);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-normal) var(--mob-ease-standard);
+}
+
+.mob-tab:hover { color: var(--mob-fg-secondary); }
+.mob-tab:active { transform: scale(var(--mob-press-scale)); }
+/* The ring is the ONLY box a tab is allowed to grow, and it is transient. It is
+   stated here rather than left to base.css so the strip's focus radius is owned
+   by --mob-tab-radius; --pill re-asserts its own further down. */
+.mob-tab:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-tab-radius);
+}
+.mob-tab[aria-selected='true'] { color: var(--mob-fg-primary); }
+/* The `.mob-tabs` prefix is load-bearing, not decoration. Each variant sets the
+   indicator's REST transform at (0,2,0) — the same weight this rule would carry
+   without it — and wins on source order, which would leave every selected
+   indicator frozen at its rest scale (a 40%-wide underline stub). Selection has
+   to outrank the variant, so it is scoped one level up. */
+.mob-tabs .mob-tab[aria-selected='true']::before { opacity: 1; transform: none; }
+
+.mob-tab[aria-disabled='true'],
+.mob-tab:disabled {
+  color: var(--mob-fg-disabled);
+  cursor: default;
+  pointer-events: none;
+}
+/* A disabled tab grows no indicator. The one exception is deliberate: a tab that
+   is disabled AND selected keeps its indicator, because it still marks the panel
+   you are looking at — only its label drops to the disabled tone. That case is
+   the selection rule above out-ranking this one. */
+.mob-tab[aria-disabled='true']::before,
+.mob-tab:disabled::before { opacity: 0; }
+
+.mob-tab__label { min-inline-size: 0; }
+.mob-tab__count {
+  font-size: var(--mob-size-2xs);
+  color: var(--mob-fg-dim);
+  font-variant-numeric: tabular-nums;
+  transition: color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-tab[aria-selected='true'] .mob-tab__count { color: var(--mob-fg-muted); }
+
+/* --- Variant: underline (default) ----------------------------------------
+   The list carries the baseline; the indicator sits on top of it. No background
+   on hover: tone alone separates the states, which is what stops five tabs from
+   looking like five ghost buttons. */
+.mob-tabs--underline {
+  border-block-end: var(--mob-hairline) solid var(--mob-border-subtle);
+}
+.mob-tabs--underline .mob-tab::before {
+  inset-inline: var(--mob-space-4);
+  inset-block-end: calc(var(--mob-hairline) * -1);   /* covers the list hairline */
+  block-size: var(--mob-tab-bar-h);
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-accent);
+  transform: scaleX(var(--mob-tab-bar-scale-rest));
+}
+.mob-tabs--underline .mob-tab:hover { color: var(--mob-fg-primary); }
+
+/* --- Variant: contained ---------------------------------------------------
+   A trough with a plate in it: 34 tab + 2 + 2 trough padding + 1 + 1 border =
+   40px, exactly control L, so the strip lines up with a button beside it. Count
+   the border — at 3px padding the strip is 42px and sits 2px proud. The plate is
+   one step lighter than the trough: the neutral ramp is dense here, so the text
+   tone does the rest. */
+.mob-tabs--contained {
+  gap: var(--mob-tab-gap);
+  padding: var(--mob-tabs-trough-pad);
+  background: var(--mob-bg-sunken);
+  border: var(--mob-border-width) solid var(--mob-border-default);
+  border-radius: var(--mob-radius-md);
+}
+.mob-tabs--contained .mob-tab {
+  --mob-tab-px: var(--mob-space-12);
+  border-radius: var(--mob-tab-radius);
+}
+.mob-tabs--contained .mob-tab::before {
+  inset: 0;
+  border-radius: var(--mob-tab-radius);
+  background: var(--mob-bg-surface-raised);
+  transform: scale(var(--mob-tab-indicator-scale-rest));
+}
+.mob-tabs--contained .mob-tab:hover { color: var(--mob-fg-primary); }
+.mob-tabs--contained .mob-tab:hover:not([aria-selected='true'])::before {
+  opacity: 1;
+  transform: scale(1);
+  background: var(--mob-tabs-bg-hover);
+}
+
+/* --- Variant: pill --------------------------------------------------------
+   A 15% accent wash under primary text. Deliberately not a solid accent fill:
+   that is the primary button, and a tab is not a primary button. */
+.mob-tabs--pill { gap: var(--mob-space-4); }
+.mob-tabs--pill .mob-tab {
+  --mob-tab-px: var(--mob-space-12);
+  border-radius: var(--mob-radius-full);
+}
+.mob-tabs--pill .mob-tab::before {
+  inset: 0;
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-tabs-bg-selected);
+  transform: scale(var(--mob-tab-indicator-scale-rest));
+}
+.mob-tabs--pill .mob-tab:hover { color: var(--mob-fg-primary); }
+.mob-tabs--pill .mob-tab:hover:not([aria-selected='true'])::before {
+  opacity: 1;
+  transform: scale(1);
+  background: var(--mob-tabs-bg-hover);
+}
+/* .mob-tab:focus-visible stamps --mob-tab-radius on the ring. Re-assert the pill
+   radius (higher specificity, so source order is irrelevant) or a focused pill
+   squares off mid-strip. Ring and outline come from that rule. */
+.mob-tabs--pill .mob-tab:focus-visible { border-radius: var(--mob-radius-full); }
+
+/* --- Variant: scroll ------------------------------------------------------
+   Horizontal overflow for narrow columns and phones. The edge fade is a mask, so
+   the colour below is irrelevant — only its alpha is read; a token is used so no
+   literal appears. The fade is symmetric, which makes it RTL-safe. */
+.mob-tabs--scroll {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-padding-inline: var(--mob-tabs-fade);   /* keeps a focused tab clear of the fade */
+  overscroll-behavior-inline: contain;
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    var(--mob-fg-primary) var(--mob-tabs-fade),
+    var(--mob-fg-primary) calc(100% - var(--mob-tabs-fade)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    var(--mob-fg-primary) var(--mob-tabs-fade),
+    var(--mob-fg-primary) calc(100% - var(--mob-tabs-fade)),
+    transparent 100%
+  );
+}
+.mob-tabs--scroll::-webkit-scrollbar { display: none; }
+
+/* --- List-level loading ---------------------------------------------------
+   The panel behind the strip is fetching. An indeterminate hairline under the
+   list — the tabs themselves stay put, keep their labels and keep their width. */
+.mob-tabs[data-mob-loading]::after {
+  content: '';
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-end: calc(var(--mob-hairline) * -1);
+  inline-size: var(--mob-tabs-loading-bar-w);
+  block-size: var(--mob-tab-bar-h);
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-accent);
+  animation: mob-tabs-loading var(--mob-tabs-loading-cycle) var(--mob-ease-standard) infinite;
+}
+
+/* =============================================================================
+   BREADCRUMBS
+   Use only for genuine hierarchy depth — three levels or more, where a user can
+   actually be lost. Do NOT add them to a shallow app because a template has
+   them (mobb spec §4.16); in a two-level product a back link is the honest
+   control. The current page is the last item and is NOT a link: mark it
+   <span aria-current="page">, so there is nothing to click that does nothing.
+   ============================================================================= */
+.mob-breadcrumbs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mob-breadcrumbs-gap);
+  min-inline-size: 0;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-breadcrumbs-size);
+  line-height: var(--mob-leading-snug);
+}
+
+.mob-breadcrumbs__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mob-breadcrumbs-gap);
+  min-inline-size: 0;
+}
+/* Separator lives in CSS so the markup stays a clean <ol> of items. */
+.mob-breadcrumbs__item:not(:last-child)::after {
+  content: var(--mob-breadcrumbs-separator);
+  color: var(--mob-fg-dim);
+  pointer-events: none;
+}
+
+.mob-breadcrumbs__link {
+  display: inline-block;
+  max-inline-size: var(--mob-breadcrumbs-item-max-w);
+  padding-block: var(--mob-space-4);
+  padding-inline: var(--mob-space-2);
+  border-radius: var(--mob-breadcrumbs-radius);
+  color: var(--mob-fg-muted);
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-breadcrumbs__link:hover { color: var(--mob-fg-primary); }
+.mob-breadcrumbs__link:active { transform: scale(var(--mob-press-scale)); }
+/* base.css rounds the ring to --mob-radius-sm, which would jump an xs crumb to
+   8px on focus. Restate the whole treatment, not just the radius. */
+.mob-breadcrumbs__link:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-breadcrumbs-radius);
+}
+
+.mob-breadcrumbs [aria-current='page'] {
+  max-inline-size: var(--mob-breadcrumbs-item-max-w);
+  padding-block: var(--mob-space-4);
+  color: var(--mob-fg-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Optional leading icon (a home mark on the first crumb). */
+.mob-breadcrumbs__icon {
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+  flex: 0 0 auto;
+}
+
+/* =============================================================================
+   MOTION
+   Both loops are ambient and indeterminate. reset.css disables them globally
+   under prefers-reduced-motion; components do not repeat that block.
+   ============================================================================= */
+@keyframes mob-nav-pending {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .3; }
+}
+/* The bar is 20% of the track, so -100% of its own width parks it just off the
+   start edge and 500% parks it just past the end. Both are multiplied by
+   --mob-nav-sweep-dir because translateX is physical while the bar is anchored
+   on the inline axis: in RTL the sign has to flip or the sweep runs backwards
+   out of the track. */
+@keyframes mob-tabs-loading {
+  from { transform: translateX(calc(-100% * var(--mob-nav-sweep-dir))); }
+  to   { transform: translateX(calc(500% * var(--mob-nav-sweep-dir))); }
+}
+[dir='rtl'] .mob-tabs { --mob-nav-sweep-dir: -1; }
+
+/* =============================================================================
+   RESPONSIVE
+   Media queries cannot read custom properties, so these literals mirror
+   --mob-bp-lg (1024px) and --mob-bp-md (768px). Keep them in sync with tokens.css.
+   ============================================================================= */
+@media (max-width: 1023px) {
+  .mob-navbar { --mob-navbar-px: var(--mob-gutter-tablet); }
+}
+
+@media (max-width: 767px) {
+  .mob-navbar {
+    --mob-navbar-px: var(--mob-gutter-mobile);
+    --mob-navbar-h: var(--mob-navbar-h-compact);
+  }
+  /* The bar collapses to brand + trigger; the links move into the drawer. */
+  .mob-navbar__nav { display: none; }
+  .mob-navbar__toggle { display: inline-grid; }
+  /* A phone-width bar has no room for a spacer plus three slots. */
+  .mob-navbar__inner { gap: var(--mob-space-12); }
+
+  /* The sidebar stops being a rail and becomes the page's own list. */
+  .mob-sidebar--collapsible[data-mob-collapsed],
+  .mob-sidebar { inline-size: 100%; }
+  .mob-sidebar--sticky { position: static; block-size: auto; }
+  .mob-sidebar--bordered { border-inline-end: 0; border-block-end: var(--mob-border-width) solid var(--mob-border-default); }
+}
+
+@media (min-width: 768px) {
+  /* Never leave an open drawer behind on rotation or resize. */
+  .mob-navbar__drawer { display: none; }
+}
+
+/* Coarse pointers: base.css raises .mob-tab (and other controls) to the 44px
+   floor with a ::after overlay. Nav rows are real rows, so they take the floor
+   directly rather than growing an invisible target on top of a 30px box. */
+@media (pointer: coarse) {
+  :root {
+    --mob-navlink-h:     var(--mob-tap-target);
+    --mob-sidebar-item-h:var(--mob-tap-target);
+  }
+  /* The drawer sets its own row height locally, which would otherwise win over
+     the root floor above. */
+  .mob-navbar__drawer .mob-navlink { --mob-navlink-h: var(--mob-tap-target); }
+  .mob-breadcrumbs__link,
+  .mob-breadcrumbs [aria-current='page'] { padding-block: var(--mob-space-8); }
+}

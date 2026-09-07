@@ -1,0 +1,1099 @@
+/* =============================================================================
+   mob-design — data marks
+   -----------------------------------------------------------------------------
+   The layer that draws data. Five marks and one identity system, all derived
+   from the calibrated handoff but named for ANY product: a bin/range meter, a
+   composition bar, a sparkline, a signed delta, a legend, and a bounded gauge.
+
+   The handoff's visuals were domain-specific (a liquidity range, a PnL curve,
+   an asset split). Nothing of that survives here except the geometry. A meter
+   is "where does the current value sit inside a bounded range, at N buckets of
+   granularity" — that is a price ladder, a battery, a rate limit, a release
+   window, a score band. Do not re-specialise these names.
+
+   ANATOMY
+
+   .mob-meter-frame                    label row + mark + min/status/max row
+     ├ .mob-meter-frame__head
+     │   ├ .mob-meter-frame__label     micro-label, e.g. "RANGE"
+     │   └ .mob-meter-frame__value     current readout, e.g. "$0.01450 spot"
+     ├ .mob-meter                      grid of N bins, baseline-aligned
+     │   └ .mob-meter__bin [--empty] [data-mob-active]
+     └ .mob-meter-frame__foot
+         ├ .mob-meter-frame__min
+         ├ .mob-meter-frame__status    tone-coloured: "In range", "Above · sold"
+         └ .mob-meter-frame__max
+
+     ┌ label ───────────────────── value ┐
+     │ ▍▍▍▍▍▍▍▍▍▍▍▍▍▍▍█                  │   bins: --mob-meter-bin-h
+     │ min ········ status ········ max  │   active bin: full --mob-meter-h
+     └───────────────────────────────────┘
+
+   .mob-bar-stack [--lg]               composition: one line split by weight
+     └ .mob-bar-stack__seg [--empty]   flex-weighted, series-coloured
+
+   .mob-spark [--sm|--lg] [--accent|--positive|--negative|--neutral]
+     └ <svg>
+         ├ .mob-spark__area            fill="url(#…)" — the gradient body
+         ├ .mob-spark__stop-from       <stop>s are STYLED, not authored
+         ├ .mob-spark__stop-to
+         └ .mob-spark__line            the stroke
+
+   .mob-delta [data-mob-sign]
+     ├ .mob-delta__glyph               ▲ / ▼ / – drawn in CSS while empty
+     ├ .mob-delta__value
+     └ .mob-delta__label               optional qualifier, e.g. "24h"
+
+   .mob-legend [--stack|--dot|--interactive]
+     └ .mob-legend__item               <button> when it filters or highlights
+         ├ .mob-legend__swatch
+         ├ .mob-legend__label
+         └ .mob-legend__value
+
+   .mob-gauge                          bounded metric on a track
+     ├ .mob-gauge__fill                start → value
+     ├ .mob-gauge__threshold           optional target/limit tick
+     └ .mob-gauge__marker              the value needle
+
+   .mob-series-1 … .mob-series-8   ·   [data-mob-series="1"…"8"]
+   .mob-series-fg  .mob-series-bg  .mob-series-mark  .mob-series-border
+
+   THE METER, GENERALISED
+   ----------------------
+   - Bin count is DATA GRANULARITY, not decoration. Set --mob-meter-bins to the
+     number of buckets the range is divided into and render that many children.
+     The handoff's 16 is one position's rung count, nothing more. Never hardcode
+     it, in CSS or in markup loops.
+   - The bin that contains the current value carries [data-mob-active]: it grows
+     to the full row height and takes the active tone plus a glow. Exactly one
+     bin is active.
+   - When the value sits OUTSIDE the range, the edge bin nearest the value is the
+     active one and __status must say so ("Above", "Below") — the mark alone
+     cannot distinguish "at the top bucket" from "past the top bucket", so the
+     text is not optional.
+   - Bins beyond the filled portion of a partial distribution take --empty. A
+     meter with no empty bins is a full range; one with empty bins is a range
+     that is only partly populated.
+   - The axis runs along the inline axis, so it mirrors under RTL. If the scale
+     must stay min→max left-to-right regardless of the surrounding text (usually
+     true for a numeric axis), put dir="ltr" on the .mob-meter itself.
+
+   THE SPARKLINE, AND WHY ITS GRADIENT LIVES IN MARKUP
+   ---------------------------------------------------
+   An SVG gradient needs an element with an id for fill="url(#id)" to reference,
+   and CSS cannot invent one. So the <defs> block is authored per instance — but
+   its stops carry no colour of their own: .mob-spark__stop-from / __stop-to are
+   styled here from --mob-spark-color and the calibrated --mob-spark-fill-from /
+   --mob-spark-fill-to opacities. One tone class retones stroke and fill
+   together, and no consumer ever writes a colour.
+
+     <div class="mob-spark mob-spark--positive">
+       <svg viewBox="0 0 100 100" preserveAspectRatio="none"
+            role="img" aria-label="Realized PnL, up 4.2% over 30 days">
+         <defs>
+           <linearGradient id="spark-pnl" x1="0" y1="0" x2="0" y2="1">
+             <stop class="mob-spark__stop-from" offset="0"></stop>
+             <stop class="mob-spark__stop-to"   offset="1"></stop>
+           </linearGradient>
+         </defs>
+         <path class="mob-spark__area" fill="url(#spark-pnl)"
+               d="M0,78 L26,44 L60,20 L96,11 L96,100 L0,100 Z"></path>
+         <path class="mob-spark__line"
+               d="M0,78 L26,44 L60,20 L96,11"></path>
+       </svg>
+     </div>
+
+   - The id must be UNIQUE PER INSTANCE. Two sparks sharing one id means the
+     second one silently paints with the first one's stops.
+   - Plot into a 0–100 box on both axes and let preserveAspectRatio="none"
+     stretch it to the container. Y is inverted, so
+     y = 100 - (v - min) / (max - min) * 100.
+   - The stroke survives that stretch only because of vector-effect:
+     non-scaling-stroke. That is also why the mark must not contain circles or
+     text: anything but a stroke is distorted by the non-uniform scale. If you
+     need point markers, use a 1:1 viewBox and a fixed size instead.
+   - The area path is the line path plus two corners back along the baseline.
+     Omit it entirely for a line-only spark; nothing else changes.
+
+   RULES FOR CONSUMERS
+   -------------------
+   1. These are marks, not charts. No axes, no gridlines, no tooltips, no
+      titles. A chart is a mark composed with layout primitives and type roles.
+   2. Every mark is a shrinkable block: it fills the column it is given and
+      never sets its own inline-size. Segments and bins carry min-inline-size:0
+      so a fused card can narrow without a mark forcing it wide.
+   3. SERIES COLOUR IDENTIFIES AN ENTITY. It is never decoration. The same
+      entity is the same series everywhere it appears — bar segment, legend
+      swatch, avatar, chip, sparkline — and a series is assigned from data
+      identity, never from position in a list. There is deliberately no
+      "cycle colours by nth-child" helper here: it would reassign every colour
+      the moment the sort order changed.
+   4. A mark is an image to assistive tech. Give the mark role="img" and an
+      aria-label that states the value in words, or render a .mob-sr-only
+      sentence beside it. Colour is never the only signal — the meter has its
+      status text, the delta has its glyph, the legend has its label.
+   5. Loading never resizes anything. Every mark reserves its own box, and
+      [data-mob-loading] only swaps ink for a tile in place. Set aria-busy.
+   6. Tone names here are valence (accent / positive / negative / neutral /
+      warning / info), matching base.css's .mob-tone-* utilities rather than
+      feedback.css's messaging names. success/error are accepted as aliases so
+      one tone value can be piped from a data layer to both.
+   7. Interactivity is opt-in and must use real controls: a clickable bin,
+      segment or legend row is a <button>, not a <div> with a handler.
+
+   MOTION
+   ------
+   Colour, opacity, box-shadow and transform only. Nothing here transitions
+   geometry: a bin's height and a segment's width are data, and animating data
+   into place lies about when it changed. Press is scale(--mob-press-scale).
+   reset.css neutralises all of it under prefers-reduced-motion.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   The shared data-mark geometry (--mob-bar-h/gap/radius, --mob-meter-h/bin-h/gap,
+   --mob-spark-h/stroke/fill-*) is already calibrated in tokens.css tier 3 and is
+   NOT restated here. What follows is only what this file adds.
+   [src] = measured in the calibrated handoff · [drv] = derived by a stated rule
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Shared -------------------------------------------------------------- */
+  --mob-dataviz-dir: 1;    /* inline-axis sign; flipped under RTL below        */
+  --mob-dataviz-dim: .38;  /* [drv] opacity of a mark muted by a legend hover  */
+  /* The glow on an active mark. tokens.css ships --mob-glow-accent/-positive/
+     -negative ready-made; these two exist so a tone WITHOUT a stock glow
+     (warning, info, a series colour) can build the identical shape instead of
+     inventing a second blur radius.                                            */
+  --mob-dataviz-glow-blur: 11px;  /* [src] */
+  --mob-dataviz-glow-alpha: 40%;  /* [src] 50% for accent, 40% for the rest   */
+  /* Emphasis is a mix toward the primary TEXT colour, not toward white, so the
+     same rule brightens on the dark canvas and darkens in light mode.          */
+  --mob-dataviz-emphasis: 16%;                                    /* [drv]     */
+
+  /* Focus rings, re-based onto the surface a mark actually sits on. The global
+     ring in base.css is 2px canvas + 2px accent and rounds to --mob-radius-sm:
+     around a 6px-wide bin that is more ring than mark, and the radius would
+     round a 3px bar into a lozenge. Refining the ring is allowed; deleting it
+     is not.                                                                     */
+  --mob-dataviz-ring-bg: var(--mob-bg-surface);
+  --mob-dataviz-ring:                          /* marks: 1px gap + 2px ring    */
+    0 0 0 var(--mob-border-width) var(--mob-dataviz-ring-bg),
+    0 0 0 calc(var(--mob-border-width) * 3) var(--mob-focus-color);
+  --mob-dataviz-ring-item:                     /* legend rows: full-size ring  */
+    0 0 0 var(--mob-border-width-strong) var(--mob-dataviz-ring-bg),
+    0 0 0 calc(var(--mob-border-width-strong) * 2) var(--mob-focus-color);
+
+  /* --- Meter --------------------------------------------------------------- */
+  --mob-meter-bins:  16;                          /* [src] one position's rungs */
+  --mob-meter-radius: var(--mob-radius-2xs);      /* [src] 3px                  */
+  --mob-meter-fill:   var(--mob-accent-deep);     /* [src] inactive bin         */
+  --mob-meter-empty:  var(--mob-bg-frame);        /* [drv] unpopulated bucket   */
+  --mob-meter-active: var(--mob-accent-bright);   /* [src] bin holding the value*/
+  --mob-meter-active-glow: var(--mob-glow-accent);/* [src] 0 0 11px @ 50%       */
+  --mob-meter-status: var(--mob-accent-bright);   /* [src] status text tone     */
+  --mob-meter-head-gap: 11px;   /* [src] label row -> mark                      */
+  --mob-meter-foot-gap:  7px;   /* [src] mark -> min/status/max row             */
+  --mob-meter-value-size: var(--mob-size-sm);  /* [src] 11px, snapped to 11.5px */
+  --mob-meter-foot-size:  var(--mob-size-2xs); /* [src] 10px                    */
+
+  /* --- Composition bar ----------------------------------------------------- */
+  --mob-bar-h-lg:    var(--mob-space-8);  /* [drv] 8px, the emphasis size       */
+  --mob-bar-empty:   var(--mob-bg-frame); /* [drv] unallocated remainder        */
+  /* A series with a real, non-zero share must never round away to nothing.
+     2px is the narrowest mark that still reads beside a --mob-bar-gap seam.
+     A series worth ZERO is omitted from the markup — it is not a 0-weight
+     segment, or this floor would draw a share that does not exist.             */
+  --mob-bar-seg-min: 2px;                                        /* [drv]       */
+
+  /* --- Sparkline ----------------------------------------------------------- */
+  --mob-spark-h-sm: 24px;  /* [drv] inline, beside a value in a table row       */
+  --mob-spark-h-lg: 72px;  /* [drv] a card's primary visual                     */
+  --mob-spark-radius: var(--mob-radius-2xs); /* only the loading/error track    */
+
+  /* --- Delta --------------------------------------------------------------- */
+  --mob-delta-gap:  var(--mob-space-4);
+  --mob-delta-size: var(--mob-size-xs);        /* 10.5px, the metadata tier     */
+  --mob-delta-size-sm: var(--mob-size-3xs);
+  --mob-delta-size-lg: var(--mob-size-lg);
+  /* Sized in em so the glyph tracks whatever type size the delta is set at.
+     .62em is the cap height of the mono face — the triangle reads as a
+     character on the same baseline, not as a bullet floating beside one.        */
+  --mob-delta-glyph: .62em;                                      /* [drv]       */
+
+  /* --- Legend -------------------------------------------------------------- */
+  --mob-legend-gap-x: var(--mob-space-12);
+  --mob-legend-gap-y: var(--mob-space-6);
+  --mob-legend-item-gap: var(--mob-control-gap);  /* [src] 6px                  */
+  --mob-legend-size: var(--mob-size-2xs);         /* [src] 10px, meter-foot tier*/
+  --mob-legend-swatch: var(--mob-space-8);        /* [drv] 8px                  */
+  /* The swatch is a clipping of the bar it explains, so it takes the bar's
+     radius rather than a shape of its own.                                      */
+  --mob-legend-swatch-radius: var(--mob-bar-radius);
+  --mob-legend-pad-y: var(--mob-space-2);         /* [drv] interactive rows only*/
+  --mob-legend-pad-x: var(--mob-space-4);
+  --mob-legend-radius: var(--mob-radius-xs);
+
+  /* --- Gauge --------------------------------------------------------------- */
+  --mob-gauge-h: var(--mob-space-6);      /* [drv] one step over the 5px bar —  */
+  --mob-gauge-radius: var(--mob-radius-2xs);            /* the needle needs room */
+  --mob-gauge-track: var(--mob-bg-frame);
+  --mob-gauge-marker-w: var(--mob-border-width-strong); /* 2px                   */
+  --mob-gauge-marker-overhang: var(--mob-space-3);      /* [drv] 3px each end    */
+  --mob-gauge-threshold-w: var(--mob-border-width);
+
+  /* --- Supplied by the markup, deliberately NOT declared here ---------------
+     These three are DATA, not design. They are read with a safe fallback and
+     set per instance from the value being drawn, never from a stylesheet:
+
+       --mob-bar-weight       on .mob-bar-stack__seg  a share, any unit-less
+                                                      number; relative to its
+                                                      siblings, so raw values
+                                                      work unnormalised
+       --mob-gauge-value      on .mob-gauge           a percentage, clamped
+       --mob-gauge-threshold  on .mob-gauge           a percentage, clamped
+
+     Declaring a default for them at :root would look tidy and would break the
+     fallback: a value inherited from the root is "set", so a component could
+     never tell a missing datum from a real zero.                              */
+}
+
+/* Two rules on purpose: an engine without :dir() support must still pick up the
+   [dir] attribute rule. Same contract as feedback.css. */
+:dir(rtl)    { --mob-dataviz-dir: -1; }
+[dir='rtl']  { --mob-dataviz-dir: -1; }
+
+/* =============================================================================
+   SERIES IDENTITY
+   The one sanctioned way to pick a categorical colour. A component reads
+   --mob-series-color (mark), --mob-series-tint (fill behind a glyph) and
+   --mob-series-glyph (that glyph's ink); it never reads --mob-series-N.
+
+   Class and attribute are equivalent — use whichever your template makes
+   cheaper. The attribute is usually easier when the number comes from data:
+   <span class="mob-legend__swatch" data-mob-series="3"></span>
+
+   Any component can opt in: an avatar, a chip, a bar segment, a legend swatch
+   and a sparkline all take their entity colour from the same three properties,
+   which is what makes one entity look like itself across a whole screen.
+   ============================================================================= */
+.mob-series-1, [data-mob-series='1'] {
+  --mob-series-color: var(--mob-series-1);
+  --mob-series-tint:  var(--mob-series-1-tint);
+  --mob-series-glyph: var(--mob-series-1-glyph);
+}
+.mob-series-2, [data-mob-series='2'] {
+  --mob-series-color: var(--mob-series-2);
+  --mob-series-tint:  var(--mob-series-2-tint);
+  --mob-series-glyph: var(--mob-series-2-glyph);
+}
+.mob-series-3, [data-mob-series='3'] {
+  --mob-series-color: var(--mob-series-3);
+  --mob-series-tint:  var(--mob-series-3-tint);
+  --mob-series-glyph: var(--mob-series-3-glyph);
+}
+.mob-series-4, [data-mob-series='4'] {
+  --mob-series-color: var(--mob-series-4);
+  --mob-series-tint:  var(--mob-series-4-tint);
+  --mob-series-glyph: var(--mob-series-4-glyph);
+}
+.mob-series-5, [data-mob-series='5'] {
+  --mob-series-color: var(--mob-series-5);
+  --mob-series-tint:  var(--mob-series-5-tint);
+  --mob-series-glyph: var(--mob-series-5-glyph);
+}
+.mob-series-6, [data-mob-series='6'] {
+  --mob-series-color: var(--mob-series-6);
+  --mob-series-tint:  var(--mob-series-6-tint);
+  --mob-series-glyph: var(--mob-series-6-glyph);
+}
+.mob-series-7, [data-mob-series='7'] {
+  --mob-series-color: var(--mob-series-7);
+  --mob-series-tint:  var(--mob-series-7-tint);
+  --mob-series-glyph: var(--mob-series-7-glyph);
+}
+.mob-series-8, [data-mob-series='8'] {
+  --mob-series-color: var(--mob-series-8);
+  --mob-series-tint:  var(--mob-series-8-tint);
+  --mob-series-glyph: var(--mob-series-8-glyph);
+}
+
+/* Helpers. Each one is a single property so they compose: an avatar is
+   .mob-series-bg, the percentage beside it is .mob-series-fg, and both stay in
+   sync because they read the same declaration.
+   The fallbacks matter — a helper used without a series must still paint
+   something legible rather than dropping the property. */
+.mob-series-fg     { color: var(--mob-series-color, var(--mob-fg-secondary)); }
+.mob-series-mark   { background-color: var(--mob-series-color, var(--mob-accent)); }
+.mob-series-border { border-color: var(--mob-series-color, var(--mob-border-control)); }
+.mob-series-bg {
+  background-color: var(--mob-series-tint, var(--mob-bg-tile));
+  color: var(--mob-series-glyph, var(--mob-fg-secondary));
+}
+
+/* =============================================================================
+   METER — a bounded range at N buckets of granularity
+   ============================================================================= */
+.mob-meter-frame {
+  display: block;
+  min-inline-size: 0;
+}
+
+.mob-meter-frame__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--mob-space-8);
+  min-inline-size: 0;
+}
+
+/* Reproduces the .mob-label role so the frame is complete on its own. Adding
+   .mob-label as well is harmless; leaving it off must not break the frame. */
+.mob-meter-frame__label {
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The live readout. Primary ink: it is the number the whole mark is about. */
+.mob-meter-frame__value {
+  font-size: var(--mob-meter-value-size);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Gaps hang off the mark, not off a flex container, because the head→mark and
+   mark→foot distances differ (11px / 7px) and both are calibrated. */
+.mob-meter-frame__head + :is(.mob-meter, .mob-gauge) {
+  margin-block-start: var(--mob-meter-head-gap);
+}
+:is(.mob-meter, .mob-gauge) + .mob-meter-frame__foot {
+  margin-block-start: var(--mob-meter-foot-gap);
+}
+
+.mob-meter-frame__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-space-6);
+  font-size: var(--mob-meter-foot-size);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+}
+.mob-meter-frame__min,
+.mob-meter-frame__max {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+/* Takes the slack between the bounds so it is centred between them rather than
+   merely pushed apart by space-between, which drifts as the bounds change width. */
+.mob-meter-frame__status {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--mob-meter-status);
+}
+
+/* --- The bin row ---------------------------------------------------------- */
+.mob-meter {
+  display: grid;
+  /* minmax(0,1fr) rather than 1fr: an auto minimum would let a bin refuse to
+     shrink and overflow the segment it lives in. */
+  grid-template-columns: repeat(var(--mob-meter-bins, 16), minmax(0, 1fr));
+  gap: var(--mob-meter-gap);
+  align-items: end;      /* bins grow upward from a shared baseline */
+  block-size: var(--mob-meter-h);
+  min-inline-size: 0;
+}
+
+.mob-meter__bin {
+  /* One local does the painting; every tone and state reassigns it and nothing
+     else, so no state can accidentally move the mark. */
+  --mob-meter-bin-color: var(--mob-meter-fill);
+  min-inline-size: 0;
+  block-size: var(--mob-meter-bin-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--mob-meter-radius);
+  background-color: var(--mob-meter-bin-color);
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    box-shadow var(--mob-duration-fast) var(--mob-ease-standard),
+    opacity var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* A bucket that exists but holds nothing. Sits at inactive height so the row
+   still reads as one scale rather than as two. */
+.mob-meter__bin--empty { --mob-meter-bin-color: var(--mob-meter-empty); }
+
+/* The bin containing the current value: full row height, active tone, glow.
+   Height is data, so it is not transitioned. */
+.mob-meter__bin[data-mob-active] {
+  --mob-meter-bin-color: var(--mob-meter-active);
+  block-size: 100%;
+  box-shadow: var(--mob-meter-active-glow);
+}
+
+/* Tone. Put it on the frame and the bin, the status text and a gauge in the
+   same frame all move together; put it on the meter to tone one mark. The
+   inactive fill for a derived tone is the tone dropped most of the way to the
+   frame colour — the same relationship --mob-accent-deep has to
+   --mob-accent-bright, which is the calibrated pair this generalises. */
+.mob-meter-frame--positive, .mob-meter-frame[data-mob-tone='positive'],
+.mob-meter-frame[data-mob-tone='success'],
+.mob-meter--positive, .mob-meter[data-mob-tone='positive'],
+.mob-meter[data-mob-tone='success'] {
+  --mob-meter-fill: color-mix(in srgb, var(--mob-positive) 42%, var(--mob-bg-frame));
+  --mob-meter-active: var(--mob-positive);
+  --mob-meter-active-glow: var(--mob-glow-positive);
+  --mob-meter-status: var(--mob-positive);
+}
+.mob-meter-frame--negative, .mob-meter-frame[data-mob-tone='negative'],
+.mob-meter-frame[data-mob-tone='error'],
+.mob-meter--negative, .mob-meter[data-mob-tone='negative'],
+.mob-meter[data-mob-tone='error'] {
+  --mob-meter-fill: color-mix(in srgb, var(--mob-negative) 42%, var(--mob-bg-frame));
+  --mob-meter-active: var(--mob-negative);
+  --mob-meter-active-glow: var(--mob-glow-negative);
+  --mob-meter-status: var(--mob-negative);
+}
+.mob-meter-frame--warning, .mob-meter-frame[data-mob-tone='warning'],
+.mob-meter--warning, .mob-meter[data-mob-tone='warning'] {
+  --mob-meter-fill: color-mix(in srgb, var(--mob-warning) 42%, var(--mob-bg-frame));
+  --mob-meter-active: var(--mob-warning);
+  --mob-meter-active-glow: 0 0 var(--mob-dataviz-glow-blur)
+    color-mix(in srgb, var(--mob-warning) var(--mob-dataviz-glow-alpha), transparent);
+  --mob-meter-status: var(--mob-warning);
+}
+.mob-meter-frame--info, .mob-meter-frame[data-mob-tone='info'],
+.mob-meter--info, .mob-meter[data-mob-tone='info'] {
+  --mob-meter-fill: color-mix(in srgb, var(--mob-info) 42%, var(--mob-bg-frame));
+  --mob-meter-active: var(--mob-info);
+  --mob-meter-active-glow: 0 0 var(--mob-dataviz-glow-blur)
+    color-mix(in srgb, var(--mob-info) var(--mob-dataviz-glow-alpha), transparent);
+  --mob-meter-status: var(--mob-info);
+}
+/* Neutral: a range with no valence. No glow — a glow is emphasis, and neutral
+   is the absence of it. */
+.mob-meter-frame--neutral, .mob-meter-frame[data-mob-tone='neutral'],
+.mob-meter--neutral, .mob-meter[data-mob-tone='neutral'] {
+  --mob-meter-fill: var(--mob-border-strong);
+  --mob-meter-active: var(--mob-fg-primary);
+  --mob-meter-active-glow: none;
+  --mob-meter-status: var(--mob-fg-secondary);
+}
+
+/* A single bin can also carry its own tone, for a distribution whose buckets
+   mean different things (in-range / out-of-range, pass / fail). */
+.mob-meter__bin[data-mob-tone='positive'], .mob-meter__bin[data-mob-tone='success'] {
+  --mob-meter-bin-color: color-mix(in srgb, var(--mob-positive) 42%, var(--mob-bg-frame));
+}
+.mob-meter__bin[data-mob-tone='negative'], .mob-meter__bin[data-mob-tone='error'] {
+  --mob-meter-bin-color: color-mix(in srgb, var(--mob-negative) 42%, var(--mob-bg-frame));
+}
+.mob-meter__bin[data-mob-tone='neutral'] { --mob-meter-bin-color: var(--mob-border-strong); }
+/* The fallback is not decoration. [data-mob-series] matches ANY value, including
+   one this file maps no colour for (a 9th entity, or the `accent` keyword other
+   components accept). Without it --mob-series-color is undefined, which makes
+   --mob-meter-bin-color invalid at computed-value time and drops background-color
+   all the way back to transparent — an invisible bin, silently. Every other
+   series consumer here already carries its fallback for the same reason. */
+.mob-meter__bin[data-mob-series] { --mob-meter-bin-color: var(--mob-series-color, var(--mob-meter-fill)); }
+/* An active bin outranks its own tone for the fill, but keeps that tone's hue:
+   these come after so [data-mob-active] still wins on the same element. */
+.mob-meter__bin[data-mob-tone='positive'][data-mob-active],
+.mob-meter__bin[data-mob-tone='success'][data-mob-active]  { --mob-meter-bin-color: var(--mob-positive); }
+.mob-meter__bin[data-mob-tone='negative'][data-mob-active],
+.mob-meter__bin[data-mob-tone='error'][data-mob-active]    { --mob-meter-bin-color: var(--mob-negative); }
+.mob-meter__bin[data-mob-tone='neutral'][data-mob-active]  { --mob-meter-bin-color: var(--mob-fg-primary); }
+
+/* --- Interactive bins ------------------------------------------------------
+   Opt in with .mob-meter--interactive and make every bin a <button> carrying an
+   aria-label ("Bucket 12: $0.0131–$0.0134, 4 fills"). A bin is 6px wide; it has
+   no affordance of its own, so the hover must be unmistakable.                 */
+.mob-meter--interactive .mob-meter__bin { cursor: pointer; }
+.mob-meter--interactive .mob-meter__bin:hover {
+  /* Hovering previews the active tone rather than inventing a third colour. */
+  --mob-meter-bin-color: color-mix(in srgb, var(--mob-meter-active) 40%, var(--mob-meter-fill));
+}
+.mob-meter--interactive .mob-meter__bin[data-mob-active]:hover {
+  --mob-meter-bin-color: color-mix(in srgb, var(--mob-fg-primary) var(--mob-dataviz-emphasis), var(--mob-meter-active));
+}
+.mob-meter__bin:focus-visible {
+  outline: none;
+  /* Refines the global ring: base.css would round the bin to --mob-radius-sm. */
+  border-radius: var(--mob-meter-radius);
+  box-shadow: var(--mob-dataviz-ring);
+}
+.mob-meter--interactive .mob-meter__bin:active { transform: scale(var(--mob-press-scale)); }
+
+/* Selected is interaction; active is data. Selection therefore never changes
+   the bin's height — it rings the bin instead, so both can be true at once. */
+.mob-meter__bin[aria-pressed='true'],
+.mob-meter__bin[aria-selected='true'] {
+  --mob-meter-bin-color: var(--mob-meter-active);
+  outline: var(--mob-border-width) solid var(--mob-fg-primary);
+  outline-offset: var(--mob-border-width);
+}
+
+.mob-meter--interactive .mob-meter__bin:disabled,
+.mob-meter--interactive .mob-meter__bin[aria-disabled='true'] {
+  --mob-meter-bin-color: var(--mob-bg-frame);
+  box-shadow: none;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
+/* --- Meter states ----------------------------------------------------------
+   Loading holds the row's exact geometry — same bin count, same heights — and
+   only drains the colour, so nothing moves when the data lands. */
+.mob-meter[data-mob-loading] { cursor: progress; pointer-events: none; }
+.mob-meter[data-mob-loading] .mob-meter__bin {
+  --mob-meter-bin-color: var(--mob-bg-tile);
+  box-shadow: none;
+}
+.mob-meter[data-mob-error] .mob-meter__bin {
+  --mob-meter-bin-color: var(--mob-bg-frame);
+  box-shadow: none;
+}
+/* Failure is stated by the status line, in words as well as tone. */
+.mob-meter-frame[data-mob-error] { --mob-meter-status: var(--mob-negative); }
+
+/* =============================================================================
+   BAR STACK — one line, split by weight
+   A composition of shares that add to a whole: asset mix, storage by type,
+   traffic by source, votes by option. Weight comes from the markup, because
+   only the data knows it:
+
+     <div class="mob-bar-stack" role="img" aria-label="ETH 59.7%, USDG 39.9%…">
+       <span class="mob-bar-stack__seg" data-mob-series="1" style="--mob-bar-weight:597"></span>
+       <span class="mob-bar-stack__seg" data-mob-series="2" style="--mob-bar-weight:399"></span>
+       <span class="mob-bar-stack__seg" data-mob-series="3" style="--mob-bar-weight:4"></span>
+     </div>
+
+   Weights are relative, so raw values work — no need to normalise to 100.
+   ============================================================================= */
+.mob-bar-stack {
+  display: flex;
+  gap: var(--mob-bar-gap);
+  block-size: var(--mob-bar-h);
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+.mob-bar-stack--lg { --mob-bar-h: var(--mob-bar-h-lg); }
+
+.mob-bar-stack__seg {
+  /* Declared on the segment, not on :root — a custom property whose value
+     contains var() resolves where it is DECLARED, so a :root-level chain would
+     freeze the fallback before any [data-mob-series] on a child could apply. */
+  --mob-bar-seg-color: var(--mob-series-color, var(--mob-accent));
+  flex: var(--mob-bar-weight, 1) 1 0;
+  min-inline-size: var(--mob-bar-seg-min);
+  padding: 0;
+  border: 0;
+  border-radius: var(--mob-bar-radius);
+  background-color: var(--mob-bar-seg-color);
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    opacity var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* The unallocated remainder: what is NOT committed yet. Reads as track, not as
+   a series, so it never appears in the legend. */
+.mob-bar-stack__seg--empty {
+  --mob-bar-seg-color: var(--mob-bar-empty);
+  min-inline-size: 0;   /* nothing is not worth a 2px floor */
+}
+
+/* --- Interactive segments --------------------------------------------------
+   .mob-bar-stack--interactive + <button> segments. Hovering one segment mutes
+   the rest, which is the same effect a legend hover produces through
+   [data-mob-dim] — one hover language, two entry points. */
+.mob-bar-stack--interactive .mob-bar-stack__seg { cursor: pointer; }
+.mob-bar-stack--interactive:hover .mob-bar-stack__seg { opacity: var(--mob-dataviz-dim); }
+.mob-bar-stack--interactive .mob-bar-stack__seg:hover,
+.mob-bar-stack--interactive .mob-bar-stack__seg:focus-visible {
+  opacity: 1;
+  --mob-bar-seg-color: color-mix(in srgb, var(--mob-fg-primary) var(--mob-dataviz-emphasis), var(--mob-series-color, var(--mob-accent)));
+}
+.mob-bar-stack__seg:focus-visible {
+  outline: none;
+  border-radius: var(--mob-bar-radius);
+  box-shadow: var(--mob-dataviz-ring);
+}
+.mob-bar-stack--interactive .mob-bar-stack__seg:active { transform: scale(var(--mob-press-scale)); }
+
+.mob-bar-stack__seg[aria-pressed='true'],
+.mob-bar-stack__seg[aria-selected='true'] {
+  opacity: 1;
+  outline: var(--mob-border-width) solid var(--mob-fg-primary);
+  outline-offset: var(--mob-border-width);
+}
+
+/* Scoped through the block so this outranks the variant hover rule above on
+   specificity as well as order — the same policy button.css states. */
+.mob-bar-stack .mob-bar-stack__seg:disabled,
+.mob-bar-stack .mob-bar-stack__seg[aria-disabled='true'] {
+  --mob-bar-seg-color: var(--mob-bg-frame);
+  opacity: 1;              /* contrast is reduced by the flat fill, not by fade */
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
+/* Loading keeps the split — same segments, same weights — and drains the hue,
+   so the bar does not re-proportion itself in front of the user. */
+.mob-bar-stack[data-mob-loading] { cursor: progress; pointer-events: none; }
+.mob-bar-stack[data-mob-loading] .mob-bar-stack__seg {
+  --mob-bar-seg-color: var(--mob-bg-tile);
+  opacity: 1;
+}
+.mob-bar-stack[data-mob-error] .mob-bar-stack__seg { --mob-bar-seg-color: var(--mob-bg-frame); }
+
+/* =============================================================================
+   SPARK — shape of a series over time, no axes
+   ============================================================================= */
+.mob-spark {
+  /* Also exposed as `color` so a consumer's own inline SVG can use
+     stroke="currentColor" without knowing the token name. */
+  --mob-spark-color: var(--mob-series-color, var(--mob-accent-bright));
+  display: block;
+  block-size: var(--mob-spark-h);
+  inline-size: 100%;
+  min-inline-size: 0;
+  color: var(--mob-spark-color);
+}
+.mob-spark > svg {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  overflow: visible;   /* a 1.6px stroke at y=0 would otherwise clip in half */
+}
+
+.mob-spark__line {
+  fill: none;
+  stroke: var(--mob-spark-color);
+  stroke-width: var(--mob-spark-stroke);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  /* The one reason the viewBox can be stretched non-uniformly: the stroke is
+     drawn after the transform, so it stays 1.6px at any container width. */
+  vector-effect: non-scaling-stroke;
+  transition: stroke var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+/* The <stop>s carry no colour in markup — these two rules are the gradient.
+   CSS beats presentation attributes, so a stray stop-color="…" in a template
+   loses to the token, which is the point. */
+.mob-spark__stop-from {
+  stop-color: var(--mob-spark-color);
+  stop-opacity: var(--mob-spark-fill-from);   /* [src] .28 */
+}
+.mob-spark__stop-to {
+  stop-color: var(--mob-spark-color);
+  stop-opacity: var(--mob-spark-fill-to);     /* [src] .02 */
+}
+.mob-spark__area { stroke: none; }
+
+/* Tone. One class retones stroke and both gradient stops, because all three
+   read the same property. [data-mob-sign] does the same, so a series that
+   flips sign retones without the markup changing class. */
+.mob-spark--accent   { --mob-spark-color: var(--mob-accent-bright); }
+.mob-spark--positive, .mob-spark[data-mob-sign='positive'] { --mob-spark-color: var(--mob-positive); }
+.mob-spark--negative, .mob-spark[data-mob-sign='negative'] { --mob-spark-color: var(--mob-negative); }
+.mob-spark--neutral,  .mob-spark[data-mob-sign='neutral']  { --mob-spark-color: var(--mob-fg-muted); }
+.mob-spark--warning  { --mob-spark-color: var(--mob-warning); }
+.mob-spark--info     { --mob-spark-color: var(--mob-info); }
+
+/* Sizes move the token, not the property, so anything else in the card that
+   reads --mob-spark-h stays in step. */
+.mob-spark--sm { --mob-spark-h: var(--mob-spark-h-sm); }
+.mob-spark--lg { --mob-spark-h: var(--mob-spark-h-lg); }
+
+/* Loading and error hold the reserved height and swap what is inside it: a flat
+   tile while the series is on its way, a dashed track when it failed. The
+   message itself belongs beside the mark (.mob-error-state), not inside it —
+   there is no room for words in 46px. */
+.mob-spark[data-mob-loading],
+.mob-spark[data-mob-error] {
+  border-radius: var(--mob-spark-radius);
+}
+.mob-spark[data-mob-loading] { background-color: var(--mob-bg-tile); cursor: progress; }
+.mob-spark[data-mob-error] {
+  border: var(--mob-border-width) dashed var(--mob-border-dashed);
+}
+.mob-spark[data-mob-loading] > svg,
+.mob-spark[data-mob-error] > svg { visibility: hidden; }
+
+/* =============================================================================
+   DELTA — a signed change, read at a glance
+   <span class="mob-delta" data-mob-sign="positive">
+     <span class="mob-delta__glyph" aria-hidden="true"></span>
+     <span class="mob-delta__value">+0.67%</span>
+     <span class="mob-delta__label">24h</span>
+   </span>
+   ============================================================================= */
+.mob-delta {
+  --mob-delta-color: var(--mob-fg-secondary);
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--mob-delta-gap);
+  font-family: var(--mob-font-mono);   /* explicit: a delta often sits inside a
+                                          sans figure block and must not inherit it */
+  font-size: var(--mob-delta-size);
+  line-height: var(--mob-leading-snug);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  /* Read through a local rather than set directly, so base.css's global
+     [data-mob-sign] colour rule cannot be silently overridden by this one. */
+  color: var(--mob-delta-color);
+}
+.mob-delta--sm { font-size: var(--mob-delta-size-sm); }
+.mob-delta--lg { font-size: var(--mob-delta-size-lg); }
+
+/* Drawn only while empty, so a consumer can drop a real icon in without it
+   being clipped by the triangle's clip-path. One shape, rotated for sign —
+   an arrow and its opposite can never drift apart. */
+.mob-delta__glyph {
+  flex: 0 0 auto;
+  align-self: center;
+  inline-size: var(--mob-delta-glyph);
+  block-size: var(--mob-delta-glyph);
+}
+.mob-delta__glyph:empty {
+  background-color: currentColor;
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.mob-delta[data-mob-sign='negative'] .mob-delta__glyph:empty { rotate: 180deg; }
+.mob-delta[data-mob-sign='neutral'] .mob-delta__glyph:empty {
+  clip-path: polygon(0 42%, 100% 42%, 100% 58%, 0 58%);   /* a flat dash: no change */
+}
+
+.mob-delta__value { font-variant-numeric: tabular-nums; }
+.mob-delta__label { color: var(--mob-fg-dim); }
+
+.mob-delta[data-mob-sign='positive'] { --mob-delta-color: var(--mob-positive); }
+.mob-delta[data-mob-sign='negative'] { --mob-delta-color: var(--mob-negative); }
+.mob-delta[data-mob-sign='neutral']  { --mob-delta-color: var(--mob-fg-secondary); }
+.mob-delta--muted { --mob-delta-color: var(--mob-fg-muted); }
+
+/* A delta is occasionally the control that switches the comparison window
+   (24h / 7d / 30d). When it is a real control it gets the full state set. */
+.mob-delta:is(a, button) {
+  border: 0;
+  padding: 0;
+  border-radius: var(--mob-radius-xs);
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-delta:is(a, button):hover {
+  --mob-delta-color: color-mix(in srgb, var(--mob-fg-primary) var(--mob-dataviz-emphasis), var(--mob-delta-color));
+}
+.mob-delta:is(a, button):focus-visible {
+  outline: none;
+  border-radius: var(--mob-radius-xs);
+  box-shadow: var(--mob-dataviz-ring-item);
+}
+.mob-delta:is(a, button):active { transform: scale(var(--mob-press-scale)); }
+.mob-delta:is(a, button):disabled,
+.mob-delta:is(a, button)[aria-disabled='true'] {
+  --mob-delta-color: var(--mob-fg-disabled);
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
+/* Loading reserves the value's width by keeping it in flow and hiding its ink
+   behind a tile; the glyph goes, because a direction is exactly what is not yet
+   known. Give the value a non-breaking placeholder of the right length. */
+.mob-delta[data-mob-loading] { --mob-delta-color: var(--mob-fg-dim); pointer-events: none; }
+.mob-delta[data-mob-loading] .mob-delta__glyph { visibility: hidden; }
+.mob-delta[data-mob-loading] .mob-delta__value {
+  color: transparent;
+  background-color: var(--mob-bg-tile);
+  border-radius: var(--mob-radius-2xs);
+}
+.mob-delta[data-mob-error] { --mob-delta-color: var(--mob-negative); }
+
+/* =============================================================================
+   LEGEND — which colour is which entity
+   A legend is not decoration around a chart; it is the only thing that makes a
+   series colour mean anything to someone who cannot resolve the hue.
+   ============================================================================= */
+.mob-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mob-legend-gap-y) var(--mob-legend-gap-x);
+  min-inline-size: 0;
+  font-size: var(--mob-legend-size);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+}
+
+/* Stacked: one entity per row, values right-aligned into a column. This is the
+   form that replaces a table when there is no room for one. */
+.mob-legend--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--mob-legend-gap-y);
+}
+.mob-legend--stack .mob-legend__item { inline-size: 100%; }
+.mob-legend--stack .mob-legend__value { margin-inline-start: auto; }
+
+.mob-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mob-legend-item-gap);
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    opacity var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+.mob-legend__swatch {
+  --mob-legend-swatch-color: var(--mob-series-color, var(--mob-accent));
+  flex: 0 0 auto;
+  inline-size: var(--mob-legend-swatch);
+  block-size: var(--mob-legend-swatch);
+  border-radius: var(--mob-legend-swatch-radius);
+  background-color: var(--mob-legend-swatch-color);
+}
+/* Round swatches for a line/point chart, where the mark being explained is not
+   a bar. Pick one per product and stay with it. */
+.mob-legend--dot .mob-legend__swatch { border-radius: var(--mob-radius-full); }
+
+.mob-legend__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mob-legend__value {
+  flex: 0 0 auto;
+  color: var(--mob-fg-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Interactive legend ----------------------------------------------------
+   Rows become <button>s that filter or highlight the series. The padded hit
+   area is pulled back out with a negative margin so the labels stay optically
+   flush with the mark above them. */
+.mob-legend--interactive {
+  margin-inline: calc(var(--mob-legend-pad-x) * -1);
+}
+.mob-legend--interactive .mob-legend__item {
+  padding: var(--mob-legend-pad-y) var(--mob-legend-pad-x);
+  border-radius: var(--mob-legend-radius);
+  cursor: pointer;
+}
+.mob-legend--interactive .mob-legend__item:hover {
+  background-color: var(--mob-bg-hover);
+  color: var(--mob-fg-secondary);
+}
+.mob-legend__item:focus-visible {
+  outline: none;
+  border-radius: var(--mob-legend-radius);
+  box-shadow: var(--mob-dataviz-ring-item);
+}
+.mob-legend--interactive .mob-legend__item:active { transform: scale(var(--mob-press-scale)); }
+
+/* Selected: the label goes to primary ink and the swatch gains a ring, so
+   selection survives a screenshot in greyscale. */
+.mob-legend__item[aria-pressed='true'],
+.mob-legend__item[aria-selected='true'] {
+  color: var(--mob-fg-primary);
+  opacity: 1;
+}
+.mob-legend__item[aria-pressed='true'] .mob-legend__swatch,
+.mob-legend__item[aria-selected='true'] .mob-legend__swatch {
+  box-shadow: 0 0 0 var(--mob-border-width) var(--mob-fg-primary);
+}
+
+/* Disabled: a series with no data in the current window. It loses its identity
+   colour AND its affordance — the flat swatch is what stops it reading as an
+   ordinary row you simply have not hovered yet. */
+.mob-legend .mob-legend__item:disabled,
+.mob-legend .mob-legend__item[aria-disabled='true'] {
+  color: var(--mob-fg-disabled);
+  background: none;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+.mob-legend .mob-legend__item:disabled .mob-legend__swatch,
+.mob-legend .mob-legend__item[aria-disabled='true'] .mob-legend__swatch {
+  --mob-legend-swatch-color: var(--mob-bg-frame);
+  box-shadow: none;
+}
+.mob-legend .mob-legend__item:disabled .mob-legend__value,
+.mob-legend .mob-legend__item[aria-disabled='true'] .mob-legend__value { color: var(--mob-fg-disabled); }
+
+.mob-legend[data-mob-loading] { cursor: progress; pointer-events: none; }
+.mob-legend[data-mob-loading] .mob-legend__swatch { --mob-legend-swatch-color: var(--mob-bg-tile); }
+.mob-legend[data-mob-loading] .mob-legend__value {
+  color: transparent;
+  background-color: var(--mob-bg-tile);
+  border-radius: var(--mob-radius-2xs);
+}
+.mob-legend[data-mob-error] .mob-legend__value { color: var(--mob-negative); }
+
+/* =============================================================================
+   GAUGE — one value inside known bounds
+   Utilisation, budget spent, score, capacity, progress toward a target. The
+   meter answers "which bucket"; the gauge answers "how far along".
+
+     <div class="mob-gauge" role="img" aria-label="Storage: 64% of 2 TB used"
+          style="--mob-gauge-value:64%">
+       <span class="mob-gauge__fill"></span>
+       <span class="mob-gauge__threshold" style="--mob-gauge-threshold:80%"></span>
+       <span class="mob-gauge__marker"></span>
+     </div>
+
+   Use .mob-meter-frame around it for the label / min / max / status furniture —
+   both marks are range marks and share that frame deliberately.
+   ============================================================================= */
+.mob-gauge {
+  --mob-gauge-color: var(--mob-series-color, var(--mob-accent));
+  position: relative;
+  inline-size: 100%;
+  min-inline-size: 0;
+  block-size: var(--mob-gauge-h);
+  border-radius: var(--mob-gauge-radius);
+  background-color: var(--mob-gauge-track);
+}
+
+/* clamp() keeps an out-of-bounds value inside the track instead of painting
+   past it. Out of bounds is a fact about the DATA, so say it in the frame's
+   status line; do not let the mark quietly lie about the maximum. */
+.mob-gauge__fill {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: clamp(0%, var(--mob-gauge-value, 0%), 100%);
+  border-radius: inherit;
+  background-color: var(--mob-gauge-color);
+  transition: background-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+/* The needle. translate is signed by direction because inset-inline-start
+   measures from the start edge, which is the right edge under RTL. */
+.mob-gauge__marker {
+  position: absolute;
+  inset-block-start: calc(var(--mob-gauge-marker-overhang) * -1);
+  block-size: calc(100% + var(--mob-gauge-marker-overhang) * 2);
+  inline-size: var(--mob-gauge-marker-w);
+  inset-inline-start: clamp(0%, var(--mob-gauge-value, 0%), 100%);
+  translate: calc(-50% * var(--mob-dataviz-dir));
+  border-radius: var(--mob-radius-2xs);
+  background-color: var(--mob-accent-bright);
+  box-shadow: var(--mob-glow-accent);
+}
+
+/* A target, limit or budget line. Quiet by design: it is a reference, never the
+   subject of the mark. */
+.mob-gauge__threshold {
+  position: absolute;
+  inset-block: 0;
+  inline-size: var(--mob-gauge-threshold-w);
+  inset-inline-start: clamp(0%, var(--mob-gauge-threshold, 0%), 100%);
+  translate: calc(-50% * var(--mob-dataviz-dir));
+  background-color: var(--mob-fg-dim);
+}
+
+.mob-gauge--positive, .mob-gauge[data-mob-tone='positive'], .mob-gauge[data-mob-tone='success'] {
+  --mob-gauge-color: var(--mob-positive);
+}
+.mob-gauge--negative, .mob-gauge[data-mob-tone='negative'], .mob-gauge[data-mob-tone='error'] {
+  --mob-gauge-color: var(--mob-negative);
+}
+.mob-gauge--warning, .mob-gauge[data-mob-tone='warning'] { --mob-gauge-color: var(--mob-warning); }
+.mob-gauge--info,    .mob-gauge[data-mob-tone='info']    { --mob-gauge-color: var(--mob-info); }
+.mob-gauge--neutral, .mob-gauge[data-mob-tone='neutral'] { --mob-gauge-color: var(--mob-fg-muted); }
+
+/* The marker follows the tone, so a gauge in the red does not carry a violet
+   needle. Separate rule: the marker is a child, and the tone lives on the root. */
+.mob-gauge[data-mob-tone] .mob-gauge__marker,
+.mob-gauge:is(.mob-gauge--positive, .mob-gauge--negative, .mob-gauge--warning, .mob-gauge--info, .mob-gauge--neutral) .mob-gauge__marker {
+  background-color: var(--mob-gauge-color);
+  box-shadow: 0 0 var(--mob-dataviz-glow-blur)
+    color-mix(in srgb, var(--mob-gauge-color) var(--mob-dataviz-glow-alpha), transparent);
+}
+
+/* Marker-less variant: a plain fill for progress-like values where the exact
+   position needs no needle. */
+.mob-gauge--flat .mob-gauge__marker { display: none; }
+
+.mob-gauge[data-mob-loading] { cursor: progress; }
+.mob-gauge[data-mob-loading] .mob-gauge__fill { --mob-gauge-color: var(--mob-bg-tile); }
+.mob-gauge[data-mob-loading] .mob-gauge__marker,
+.mob-gauge[data-mob-loading] .mob-gauge__threshold { visibility: hidden; }
+.mob-gauge[data-mob-error] .mob-gauge__fill { --mob-gauge-color: var(--mob-negative); }
+
+/* =============================================================================
+   CROSS-MARK LINK-UP
+   One attribute, set by whatever is doing the highlighting, mutes every other
+   mark on the screen. Hovering a legend row dims the bar segments that are not
+   its series; selecting a series in a bar dims the other legend rows. Keeping
+   it in one attribute is what stops each chart inventing its own hover language.
+
+     el.toggleAttribute('data-mob-dim', id !== activeId)
+
+   Opacity only — a dimmed mark must not move, resize or reflow.
+   ============================================================================= */
+:is(.mob-meter__bin,
+    .mob-bar-stack__seg,
+    .mob-legend__item,
+    .mob-spark,
+    .mob-gauge)[data-mob-dim] {
+  opacity: var(--mob-dataviz-dim);
+}
+
+/* =============================================================================
+   FORCED COLOURS
+   Every hue is replaced by the OS palette, so series identity — the whole point
+   of the colour — is gone. The marks stay readable as SHAPE, and the legend's
+   text label becomes the only thing naming a series. That is precisely why a
+   legend may never identify a series by swatch alone.
+   (.mob-meter__bin is handled in a11y.css; these are the marks it does not cover.)
+   ============================================================================= */
+@media (forced-colors: active) {
+  .mob-bar-stack__seg,
+  .mob-legend__swatch,
+  .mob-gauge__fill { background-color: CanvasText; }
+
+  .mob-bar-stack__seg--empty { background-color: Canvas; border: var(--mob-border-width) solid GrayText; }
+
+  .mob-gauge { background-color: Canvas; border: var(--mob-border-width) solid GrayText; }
+  .mob-gauge__marker { background-color: Highlight; box-shadow: none; }
+  .mob-gauge__threshold { background-color: GrayText; }
+
+  .mob-spark__line { stroke: CanvasText; }
+  .mob-spark__area { fill: none; }   /* gradients do not survive; the line does */
+
+  .mob-delta__glyph:empty { background-color: CanvasText; }
+
+  /* Dimming is invisible against a forced palette and only harms legibility. */
+  :is(.mob-meter__bin, .mob-bar-stack__seg, .mob-legend__item,
+      .mob-spark, .mob-gauge)[data-mob-dim] { opacity: 1; }
+}

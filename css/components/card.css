@@ -1,0 +1,828 @@
+/* =============================================================================
+   mob-design — card, segmented frame, list row, avatar
+   -----------------------------------------------------------------------------
+   Four related blocks live here because they are one construction problem: a
+   surface, the way two surfaces are fused, the row that fills them, and the
+   entity mark that opens the row.
+
+     .mob-card        one surface: bg + 1px border + radius. No shadow, ever.
+     .mob-segmented   THE SIGNATURE — several surfaces fused into one card,
+                      separated by 1px gaps that reveal the frame beneath.
+     .mob-list-row    avatar + name/sub + right-aligned value/share.
+     .mob-avatar      round tinted glyph, alone or overlapped in a stack.
+
+   ANATOMY
+
+     .mob-card
+     ┌───────────────────────────────────────────────────────┐
+     │ __header   __title ──────────── __meta   __actions    │
+     │ __body                                                │
+     │ ─────────────────────────────── __footer--ruled       │
+     │ __footer   Value                        $31.12 100%   │
+     └───────────────────────────────────────────────────────┘
+
+     .mob-segmented        background = --mob-bg-frame, overflow:hidden
+     ┌────────────┊──────────────────────┊────────────┊──────┐
+     │ __seg      ┊ __seg--wide          ┊ __seg      ┊ --actions
+     └────────────┊──────────────────────┊────────────┊──────┘
+                  ↑ not a border — a 1px gap with the frame showing through
+
+   RULES A CONSUMER MUST FOLLOW
+
+   1. A whole card is clickable ONLY if it represents exactly one destination or
+      one action. A card carrying three buttons is not a link; make the buttons
+      the targets and leave the card static.
+   2. If a clickable card does contain buttons, the buttons need explicit event
+      handling (stopPropagation, or a stretched-link ::after over the card with
+      the real controls raised above it). CSS cannot resolve that for you.
+   3. Do not put a decorative border around every nested block. Inside a card,
+      separation is a .mob-card__hairline, a .mob-card__footer--ruled rule, or
+      nothing. Nested bordered boxes are how a product starts looking like a
+      dashboard template.
+   4. `.mob-card--interactive` must be rendered as an <a> or <button>, or given
+      role + tabindex. The hover state is not a substitute for a real target.
+   5. Boolean state attributes are presence-based: render `data-mob-selected`
+      only when true (React: `data-mob-selected={selected || undefined}`), never
+      as the string "false".
+   6. A disabled card is a visual state only. Disable the controls inside it too
+      — no stylesheet can take them out of the tab order for you.
+   7. Text inside a card takes the type roles from base.css (.mob-title,
+      .mob-label, .mob-value, .mob-meta, .mob-figure-*); the loading state takes
+      .mob-skeleton from feedback.css. This file owns surfaces, seams and
+      layout, and deliberately re-declares neither.
+
+   TOKEN HOOK CONVENTION
+   Anything a consumer is expected to override (segment basis, avatar tint, the
+   ring colour behind a stacked avatar) is left UNSET here and defaulted in the
+   var() fallback at the point of use. That is deliberate: the default then
+   re-resolves on the element that uses it, so density zones, subtree themes and
+   nested surfaces keep working, and a value set on an ancestor is never stomped
+   by a declaration on the child. Fixed component values are declared in the
+   :root blocks below, per the tier-3 rule in tokens.css.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS — geometry
+   Calibrated, off-scale values measured from the handoff. They live here rather
+   than inline so every card in the product reads the same number.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Card internal rhythm */
+  --mob-card-header-gap:  var(--mob-space-12); /* [drv] header -> body            */
+  --mob-card-footer-gap:  var(--mob-space-12); /* [src] body -> the value rule    */
+  --mob-card-rule-gap:    var(--mob-space-10); /* [src] rule -> footer content    */
+  --mob-card-empty-min-h: 132px;               /* [drv] dashed empty container    */
+  --mob-card-media-ratio: 16 / 9;              /* [drv] one ratio, not one per card */
+
+  /* Segmented frame. --mob-seg-basis / --mob-seg-min are the public hooks:
+       <div class="mob-segmented__seg" style="--mob-seg-basis:252px; --mob-seg-min:252px">
+     Set them on the frame to retune every segment at once — they inherit.       */
+  --mob-seg-basis:         240px; /* [src] range segment flex-basis              */
+  --mob-seg-min:           200px; /* [src] narrowest measured segment            */
+  --mob-seg-basis-actions: 104px; /* [src] action column                         */
+  --mob-seg-min-actions:    96px; /* [src]                                       */
+  --mob-seg-pad-x-lg:       18px; /* [src] roomier gutter: range + fees segments */
+  --mob-seg-pad-actions:    12px; /* [src] action column, all sides              */
+
+  /* List row */
+  --mob-list-row-gap:        var(--mob-space-10); /* [src] avatar -> name        */
+  --mob-list-row-sub-gap:    var(--mob-space-3);  /* [src] name -> sub, value -> share */
+  --mob-list-row-radius:     var(--mob-radius-lg);
+  --mob-list-row-inset-pad-y:var(--mob-space-6);  /* [drv] menu / list-item use  */
+  --mob-list-row-inset-pad-x:var(--mob-space-8);  /* [drv]                       */
+
+  /* Avatar */
+  --mob-avatar-ring-w: var(--mob-border-width-strong); /* [src] 2px cut-out ring */
+}
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS — colour
+   Declared for [data-mob-theme] as well as :root so that a light island inside a
+   dark page re-derives these mixes against that subtree's semantic tokens rather
+   than against the document root's.
+   -------------------------------------------------------------------------- */
+:root,
+[data-mob-theme] {
+  --mob-card-bg-hover:         var(--mob-bg-hover);
+  --mob-card-border-hover:     var(--mob-border-strong);
+
+  /* Pressed. A card presses by luminance, never by scale — see the note on
+     .mob-card--interactive:active below. Same token table.css uses for a
+     pressed row, so a card and a row dent by the same amount.                  */
+  --mob-card-bg-pressed:       var(--mob-bg-active);
+
+  /* Selected: stronger border + accent tint. The tint is mixed into the card
+     surface rather than swapped for it, so a selected card stays the same
+     luminance step in the surface hierarchy.                                    */
+  --mob-card-bg-selected:      color-mix(in srgb, var(--mob-accent-tint) 55%, var(--mob-card-bg));
+  --mob-card-border-selected:  color-mix(in srgb, var(--mob-accent) 45%, var(--mob-border-strong));
+  /* The same recipe over the pressed surface instead of the resting one, so a
+     selected card still dents under the finger without trading its tint away. */
+  --mob-card-bg-selected-pressed: color-mix(in srgb, var(--mob-accent-tint) 55%, var(--mob-card-bg-pressed));
+
+  /* Featured is quieter than selected: selection is a user act, featuring is an
+     editorial one, and the editorial one must not out-shout it.                 */
+  --mob-card-bg-featured:      color-mix(in srgb, var(--mob-accent-tint) 26%, var(--mob-card-bg));
+  --mob-card-border-featured:  color-mix(in srgb, var(--mob-accent) 34%, var(--mob-border-default));
+
+  --mob-card-border-dashed-hover: color-mix(in srgb, var(--mob-accent) 40%, var(--mob-border-dashed));
+
+  /* Disabled sinks the surface instead of raising it — a disabled card must not
+     read as a normal secondary surface (see rule 7 of the system brief).        */
+  --mob-card-bg-disabled:      var(--mob-bg-sunken);
+  --mob-card-border-disabled:  var(--mob-border-subtle);
+
+  --mob-card-border-error:     color-mix(in srgb, var(--mob-negative) 38%, var(--mob-border-default));
+}
+
+/* =============================================================================
+   CARD
+   ============================================================================= */
+.mob-card {
+  position: relative;
+  background: var(--mob-card-bg);
+  border: var(--mob-border-width) solid var(--mob-card-border);
+  border-radius: var(--mob-card-radius);
+  padding-block: var(--mob-card-pad-y);
+  padding-inline: var(--mob-card-pad-x);
+  color: var(--mob-fg-primary);
+  min-inline-size: 0; /* survives being a flex/grid child without overflowing */
+}
+
+/* Explicit no-op, so a `variant` prop can always emit a class. Static is the
+   default: a card with no variant is static. */
+.mob-card--static { cursor: default; }
+
+/* --- Padding steps -------------------------------------------------------- */
+.mob-card--pad-sm {
+  padding-block: var(--mob-card-pad-y-sm);
+  padding-inline: var(--mob-card-pad-x-sm);
+}
+.mob-card--pad-lg {
+  padding-block: var(--mob-card-pad-y-lg);
+  padding-inline: var(--mob-card-pad-x-lg);
+}
+
+/* --- Surface variants ----------------------------------------------------- */
+
+/* A well *inside* a card: one step down, border drops to subtle so the well does
+   not read as a second card. The avatar ring follows the surface. */
+.mob-card--sunken {
+  background: var(--mob-bg-sunken);
+  border-color: var(--mob-border-subtle);
+  --mob-avatar-ring: var(--mob-bg-sunken);
+}
+
+/* Accent border treatment. No glow, no gradient: the border does the work. */
+.mob-card--featured {
+  background: var(--mob-card-bg-featured);
+  border-color: var(--mob-card-border-featured);
+}
+
+/* Empty container. Transparent, not a surface — nothing is here yet, so nothing
+   should look filled. Radius stays on the card scale (README: 10–12px). */
+.mob-card--dashed {
+  background: none;
+  border-style: dashed;
+  border-color: var(--mob-border-dashed);
+  min-block-size: var(--mob-card-empty-min-h);
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: var(--mob-space-8);
+  text-align: center;
+}
+/* An empty container that is also a drop target or an "add" affordance answers
+   on its border. It must not acquire a filled surface on hover — there is
+   nothing in it to fill. Two classes, so it beats .mob-card--interactive:hover
+   on specificity wherever the two land in the file. */
+.mob-card--dashed.mob-card--interactive:hover {
+  background: none;
+  border-color: var(--mob-card-border-dashed-hover);
+}
+
+/* Flush: the card is a frame for something that reaches its edges — a table, a
+   list, a media block. overflow:hidden is what makes the content take the card's
+   corners; it also clips any focus ring drawn on a direct child, which is why
+   rows inside a flush card should be inset. */
+.mob-card--flush,
+.mob-card--media {
+  padding: 0;
+  overflow: hidden;
+}
+/* Anything that still wants the card's own gutters asks for it by name. A table
+   dropped straight into a flush card stays edge-to-edge, which is the point. */
+.mob-card--flush > .mob-card__header,
+.mob-card--flush > .mob-card__body,
+.mob-card--flush > .mob-card__footer,
+.mob-card--media > .mob-card__header,
+.mob-card--media > .mob-card__body,
+.mob-card--media > .mob-card__footer {
+  padding-block: var(--mob-card-pad-y);
+  padding-inline: var(--mob-card-pad-x);
+}
+.mob-card--flush > .mob-card__header,
+.mob-card--media > .mob-card__header { margin-block-end: 0; }
+.mob-card--flush > .mob-card__footer,
+.mob-card--media > .mob-card__footer { margin-block-start: 0; }
+
+/* =============================================================================
+   CARD — STATES
+   Written in cascade order: hover -> focus -> pressed -> selected -> error ->
+   loading -> disabled. Disabled is last on purpose: it wins by both order and
+   specificity, so no combination of the states above can make a dead card look
+   alive. Focus is deliberately NOT suppressed when disabled — an aria-disabled
+   element is still focusable, and a keyboard user must still see where they are.
+   ============================================================================= */
+.mob-card--interactive {
+  cursor: pointer;
+  /* Paint-only transitions. Nothing here affects layout, so a hover can never
+     shift the row it lives in. box-shadow is deliberately NOT in the list: the
+     focus ring is drawn with it, and a ring that fades in is a ring that arrives
+     late — keyboard feedback has to be instant. */
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color     var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+/* Hover changes the surface and the border. It does not lift, scale, glow or
+   grow — the card occupies exactly the same box before and after. */
+.mob-card--interactive:hover {
+  background: var(--mob-card-bg-hover);
+  border-color: var(--mob-card-border-hover);
+}
+
+/* base.css rounds every :focus-visible box to --mob-radius-sm; a card is
+   --mob-card-radius, so restate it or the ring cuts the corners. */
+.mob-card--interactive:focus-visible {
+  outline: none;
+  border-radius: var(--mob-card-radius);
+  box-shadow: var(--mob-focus-ring);
+}
+
+/* Press is a luminance step, not a scale. --mob-press-scale is the CONTROL
+   vocabulary: docs/05-motion.md §4.2 caps it at controls under ~320px and ends
+   "never scale a card, a table row or a whole panel on press";
+   docs/10-anti-patterns.md repeats it as "for controls only, never on a
+   container". A card is a container and is normally far wider than the cap, so
+   .985 reads as rubber rather than as a dent, it blurs the 1px border and the
+   text for the duration of the press — the crisp 1px edge being the whole
+   quality signal of this system — and inside a fused row it tears the hairline
+   the card shares with its neighbours. Swap the surface at
+   --mob-duration-instant instead: same information, nothing moves. This is what
+   table.css already does for a pressed row. */
+.mob-card--interactive:active {
+  background: var(--mob-card-bg-pressed);
+  transition-duration: var(--mob-duration-instant);
+}
+
+.mob-card--selected,
+.mob-card[data-mob-selected],
+.mob-card[aria-selected='true'],
+.mob-card[aria-current]:not([aria-current='false']) {
+  background: var(--mob-card-bg-selected);
+  border-color: var(--mob-card-border-selected);
+}
+/* Selection must stay visible under the pointer, so hover on a selected card
+   only lifts the border a step; the tint is not traded away. */
+.mob-card--interactive:is(.mob-card--selected, [data-mob-selected], [aria-selected='true']):hover {
+  background: var(--mob-card-bg-selected);
+  border-color: color-mix(in srgb, var(--mob-accent) 62%, var(--mob-border-strong));
+}
+/* Press on a selected card. Needed as its own rule because the press is now a
+   background rather than a transform: it no longer composes with the selected
+   surface, it collides with it, and the selection rules above would win. Same
+   specificity shape as the hover companion, so the disabled block below still
+   overrides both. */
+.mob-card--interactive:is(.mob-card--selected, [data-mob-selected], [aria-selected='true']):active {
+  background: var(--mob-card-bg-selected-pressed);
+  border-color: color-mix(in srgb, var(--mob-accent) 62%, var(--mob-border-strong));
+}
+
+.mob-card[data-mob-error] { border-color: var(--mob-card-border-error); }
+
+.mob-card__error {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-space-6);
+  color: var(--mob-negative);
+  font-size: var(--mob-size-md);
+  line-height: var(--mob-leading-snug);
+}
+
+/* Loading. The card keeps its box: only its contents are swapped, for
+   .mob-skeleton blocks of the same geometry (feedback.css). This file ships no
+   placeholder of its own on purpose — two loading treatments in one product is
+   exactly the drift the system exists to prevent. Reserve the width at the use
+   site, which is where the content's length is known:
+
+     <span class="mob-skeleton mob-skeleton--title" style="inline-size: 9ch"></span>
+
+   On the mono face with tabular-nums, 9ch is exactly nine glyphs — the width of
+   "$4,800.09" — so the real number lands without the row moving. Set
+   aria-busy="true" alongside the attribute. */
+.mob-card[data-mob-loading] { cursor: progress; }
+.mob-card[data-mob-loading].mob-card--interactive:hover {
+  background: var(--mob-card-bg);
+  border-color: var(--mob-card-border);
+}
+.mob-card[data-mob-loading].mob-card--interactive:active { background: var(--mob-card-bg); }
+
+.mob-card:disabled,
+.mob-card[aria-disabled='true'],
+.mob-card[data-mob-disabled],
+.mob-card:disabled:hover,
+.mob-card[aria-disabled='true']:hover,
+.mob-card[data-mob-disabled]:hover {
+  background: var(--mob-card-bg-disabled);
+  border-color: var(--mob-card-border-disabled);
+  color: var(--mob-fg-disabled);
+  cursor: not-allowed;
+  /* Affordance removed, not just dimmed: entity marks lose their series colour
+     too, so a disabled row cannot be mistaken for a quiet live one. */
+  --mob-avatar-tint: var(--mob-bg-tile);
+  --mob-avatar-fg: var(--mob-fg-disabled);
+  --mob-series-fg: var(--mob-fg-disabled);
+}
+.mob-card:disabled:active,
+.mob-card[aria-disabled='true']:active,
+.mob-card[data-mob-disabled]:active { background: var(--mob-card-bg-disabled); }
+/* The high-contrast text roles inside carry their own colour, so they have to be
+   told as well; the already-dim roles are left alone. */
+.mob-card:is(:disabled, [aria-disabled='true'], [data-mob-disabled])
+  :is(.mob-card__title, .mob-list-row__name, .mob-list-row__value) {
+  color: var(--mob-fg-disabled);
+}
+
+/* =============================================================================
+   CARD — ELEMENTS
+   ============================================================================= */
+.mob-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-space-10);
+  margin-block-end: var(--mob-card-header-gap);
+}
+/* A micro-label sitting next to its right-hand meta reads on the baseline, not
+   the box centre — that is the measured treatment on the PnL card. */
+.mob-card__header--baseline { align-items: baseline; }
+
+/* Token-for-token the .mob-title role from base.css: a card title is that role.
+   Both read the same tokens, so they cannot drift apart on value. For an entity
+   name inside a segment use .mob-heading-sm — the measured pool name is 14.5px. */
+.mob-card__title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-xl);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+
+.mob-card__meta {
+  flex: 0 0 auto;
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+}
+
+.mob-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-control-gap);
+  margin-inline-start: auto;
+}
+/* The vertical action column of a position row. Stretch, so every button in the
+   stack is exactly as wide as the segment — repetition must be exact. */
+.mob-card__actions--stack {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: center;
+  margin-inline-start: 0;
+}
+
+.mob-card__body { min-inline-size: 0; }
+
+.mob-card__footer {
+  display: flex;
+  align-items: baseline; /* [src] a 10px label reads against a 12.5px value */
+  justify-content: space-between;
+  gap: var(--mob-space-10);
+  margin-block-start: var(--mob-card-footer-gap);
+}
+/* The measured value line: hairline above, 12px of air over it, 10px under. */
+.mob-card__footer--ruled {
+  border-block-start: var(--mob-hairline) solid var(--mob-border-subtle);
+  padding-block-start: var(--mob-card-rule-gap);
+}
+
+.mob-card__media {
+  display: block;
+  inline-size: 100%;
+  aspect-ratio: var(--mob-card-media-ratio);
+  object-fit: cover;
+  background: var(--mob-bg-tile); /* the box is reserved before the file lands */
+}
+/* In a padded card the media is an inner tile, so it takes the inner radius. In
+   a --media or --flush card the card's own overflow:hidden does the clipping. */
+.mob-card:not(.mob-card--media, .mob-card--flush) > .mob-card__media {
+  border-radius: var(--mob-radius-lg);
+}
+
+/* A painted 1px divider for use *inside* a surface — between the two halves of a
+   fees/PnL block, for instance. Vertical by default, because the horizontal case
+   is already served by .mob-card__footer--ruled. Not a border on a nested box:
+   see rule 3 in the header. */
+.mob-card__hairline {
+  flex: 0 0 auto;
+  inline-size: var(--mob-hairline);
+  align-self: stretch;
+  background: var(--mob-border-frame);
+}
+.mob-card__hairline--horizontal {
+  inline-size: auto;
+  block-size: var(--mob-hairline);
+  align-self: auto;
+}
+
+/* =============================================================================
+   SEGMENTED FRAME — the signature construction
+   -----------------------------------------------------------------------------
+   Why the seams are gaps and not borders:
+
+     The frame is painted --mob-bg-frame and clips its children. Every segment is
+     opaque --mob-card-bg. A 1px `gap` therefore lets exactly 1px of the frame
+     show through between two segments — that IS the hairline. Nothing draws it.
+
+   What this buys, and what a border cannot:
+     · Two adjacent segments can never produce a 2px double border, because
+       neither of them owns a border.
+     · The seam is the same 1px on the wrap line as on the column line: `gap`
+       covers both axes, so a segment that wraps to a second row is still fused.
+     · align-items:stretch makes every segment in a row the same height, so the
+       seam runs the full height with no stub at the end.
+     · Every segment shrinks (flex-shrink stays 1 everywhere in this file), so a
+       fused card narrows with its column instead of overflowing it. This is the
+       single reason the position row survives a 900px viewport.
+
+   Consequences to respect:
+     · The frame carries no padding. Any padding on it would appear as a wide
+       band of frame colour along the card edge.
+     · Segments must stay opaque. A translucent segment leaks the frame colour
+       across its whole face, not just at the seam.
+     · overflow:hidden clips outward box-shadows, which is why a focusable
+       segment uses the inset focus ring below.
+   ============================================================================= */
+.mob-segmented {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: var(--mob-hairline); /* column AND row: the wrap seam is a hairline too */
+  background: var(--mob-bg-frame);
+  border: var(--mob-border-width) solid var(--mob-border-default);
+  border-radius: var(--mob-card-radius);
+  overflow: hidden; /* gives the segments the frame's corners */
+}
+
+.mob-segmented__seg {
+  box-sizing: border-box;
+  flex: 1 1 var(--mob-seg-basis);
+  min-inline-size: var(--mob-seg-min);
+  background: var(--mob-card-bg);
+  /* Unset hooks with a fallback to the card's own padding, so a segment tracks
+     the density zone it sits in exactly as a card does. */
+  padding-block: var(--mob-seg-pad-y, var(--mob-card-pad-y));
+  padding-inline: var(--mob-seg-pad-x, var(--mob-card-pad-x));
+  color: var(--mob-fg-primary);
+}
+
+/* --- Flex presets ----------------------------------------------------------
+   Every preset keeps flex-shrink:1. Nothing in a fused row is unshrinkable —
+   that is what stops the row overflowing a narrow column. */
+.mob-segmented__seg--fixed { flex: 0 1 var(--mob-seg-basis); } /* never grows */
+.mob-segmented__seg--grow  { flex: 1 1 var(--mob-seg-basis); } /* default, explicit */
+.mob-segmented__seg--wide  { flex: 2 1 var(--mob-seg-basis); } /* takes twice the slack */
+.mob-segmented__seg--actions {
+  flex: 0 1 var(--mob-seg-basis-actions); /* 0-grow, 1-shrink: an action column
+                                             is sized by its buttons, not by the
+                                             slack in the row */
+  min-inline-size: var(--mob-seg-min-actions);
+  padding: var(--mob-seg-pad-actions);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: var(--mob-control-gap);
+}
+
+/* --- Segment layout modifiers --------------------------------------------- */
+.mob-segmented__seg--flush  { padding: 0; }  /* a segment holding a table or media */
+.mob-segmented__seg--pad-lg { padding-inline: var(--mob-seg-pad-x-lg); } /* [src] */
+.mob-segmented__seg--center {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+/* --- Interactive segment ---------------------------------------------------
+   For the case where one segment of a fused row is the target (open the pool,
+   expand the range). Surface only — a segment cannot move without breaking the
+   seam it shares with its neighbours. */
+.mob-segmented__seg--interactive {
+  cursor: pointer;
+  transition: background-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-segmented__seg--interactive:hover { background: var(--mob-bg-hover); }
+.mob-segmented__seg--interactive:focus-visible {
+  outline: none;
+  /* Inset, because the frame's overflow:hidden would clip an outward ring. And
+     square, because base.css otherwise rounds the focused box and the frame
+     would show through the segment's corners. */
+  border-radius: 0;
+  box-shadow: var(--mob-focus-ring-inset);
+}
+.mob-segmented__seg--interactive[aria-selected='true'],
+.mob-segmented__seg--interactive[data-mob-selected] {
+  background: var(--mob-card-bg-selected);
+}
+.mob-segmented__seg--interactive:is(:disabled, [aria-disabled='true'], [data-mob-disabled]),
+.mob-segmented__seg--interactive:is(:disabled, [aria-disabled='true'], [data-mob-disabled]):hover {
+  background: var(--mob-card-bg-disabled);
+  color: var(--mob-fg-disabled);
+  cursor: not-allowed;
+}
+
+/* --- Frame states ----------------------------------------------------------
+   Tinting the frame tints every seam at once — the hairlines are the frame. That
+   is the cheapest possible "this whole fused row is selected". */
+.mob-segmented[data-mob-selected],
+.mob-segmented[aria-selected='true'] {
+  background: color-mix(in srgb, var(--mob-accent) 30%, var(--mob-bg-frame));
+  border-color: var(--mob-card-border-selected);
+}
+.mob-segmented[data-mob-error] {
+  background: color-mix(in srgb, var(--mob-negative) 26%, var(--mob-bg-frame));
+  border-color: var(--mob-card-border-error);
+}
+
+/* --- Stacked fallback ------------------------------------------------------
+   Segments become full-width rows and the hairlines become horizontal. The flex
+   reset is mandatory, not tidiness: in a column flex container flex-basis sizes
+   the BLOCK axis, so leaving `flex: 1 1 240px` in place would give every segment
+   a 240px-tall floor. */
+.mob-segmented--stack { flex-direction: column; }
+.mob-segmented--stack > .mob-segmented__seg {
+  flex: 0 0 auto;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+/* Three full-width buttons in a column is a different design. In stacked mode an
+   action segment is already full width, so its buttons lay out as a row —
+   whether the segment is the flex container itself or wraps a __actions--stack. */
+.mob-segmented--stack > .mob-segmented__seg--actions,
+.mob-segmented--stack > .mob-segmented__seg--actions .mob-card__actions--stack {
+  flex-direction: row;
+  align-items: center;
+}
+
+@media (max-width: 767px) {
+  .mob-segmented--stack-mobile { flex-direction: column; }
+  .mob-segmented--stack-mobile > .mob-segmented__seg {
+    flex: 0 0 auto;
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+  .mob-segmented--stack-mobile > .mob-segmented__seg--actions,
+  .mob-segmented--stack-mobile > .mob-segmented__seg--actions .mob-card__actions--stack {
+    flex-direction: row;
+    align-items: center;
+  }
+}
+
+/* =============================================================================
+   LIST ROW  [src]
+   avatar + name/sub + right-aligned value/share — the portfolio asset row, and
+   with --interactive the same geometry as a menu row or a selectable list item.
+   ============================================================================= */
+.mob-list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-list-row-gap);
+  min-inline-size: 0;
+  border-radius: var(--mob-list-row-radius);
+  /* Padding-free by default: in the rail these rows are separated by the stack's
+     14px gap, and padding would double-space them. --inset adds it back. */
+  padding: 0;
+}
+
+/* Menu / list-item use. The negative inline margin lets the hover surface reach
+   past the text without moving the text: names stay on the card's content edge,
+   only the highlight grows. */
+.mob-list-row--inset {
+  padding-block: var(--mob-list-row-inset-pad-y);
+  padding-inline: var(--mob-list-row-inset-pad-x);
+  margin-inline: calc(-1 * var(--mob-list-row-inset-pad-x));
+}
+
+.mob-list-row__main {
+  flex: 1 1 auto;
+  min-inline-size: 0; /* without this the name refuses to truncate */
+}
+/* Truncation is built in: a row with a right-aligned value must never let a long
+   name push the number out of alignment. */
+.mob-list-row__name {
+  font-size: var(--mob-size-md);
+  color: var(--mob-fg-secondary);
+  line-height: var(--mob-leading-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mob-list-row__sub {
+  margin-block-start: var(--mob-list-row-sub-gap);
+  font-size: var(--mob-size-2xs);
+  color: var(--mob-fg-label);
+  line-height: var(--mob-leading-snug);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mob-list-row__trail {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  text-align: end;
+}
+.mob-list-row__value {
+  font-size: var(--mob-size-xl);
+  color: var(--mob-fg-primary);
+  line-height: var(--mob-leading-snug);
+}
+/* The share is tinted by the row's series so the number, the avatar and the
+   composition bar segment all say "this asset" in the same colour. Untinted, it
+   is ordinary metadata. */
+.mob-list-row__share {
+  margin-block-start: var(--mob-list-row-sub-gap);
+  font-size: var(--mob-size-2xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-series-fg, var(--mob-fg-label));
+}
+
+/* --- List row states ------------------------------------------------------- */
+.mob-list-row--interactive {
+  cursor: pointer;
+  transition: background-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+/* The name carries its own colour, so the transition has to live on the name —
+   declaring it on the row would animate nothing. */
+.mob-list-row--interactive .mob-list-row__name {
+  transition: color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-list-row--interactive:hover { background: var(--mob-bg-hover); }
+.mob-list-row--interactive:hover .mob-list-row__name { color: var(--mob-fg-primary); }
+.mob-list-row--interactive:focus-visible {
+  outline: none;
+  border-radius: var(--mob-list-row-radius);
+  box-shadow: var(--mob-focus-ring);
+}
+/* A row presses by luminance for the same reason a card does, and one more:
+   docs/05-motion.md names "a table row" explicitly, and table.css already
+   presses its rows with --mob-bg-active rather than a transform. A list row is
+   also routinely a child of a .mob-segmented__seg, where any transform would
+   pull it off the 1px seam it shares with the next segment. */
+.mob-list-row--interactive:active {
+  background: var(--mob-card-bg-pressed);
+  transition-duration: var(--mob-duration-instant);
+}
+
+/* Selection survives hover and is legible without colour alone — the name goes
+   to primary as well as the surface changing. */
+.mob-list-row[data-mob-selected],
+.mob-list-row[aria-selected='true'],
+.mob-list-row[aria-current]:not([aria-current='false']),
+.mob-list-row[data-mob-selected]:hover,
+.mob-list-row[aria-selected='true']:hover,
+.mob-list-row[aria-current]:not([aria-current='false']):hover {
+  background: var(--mob-card-bg-selected);
+}
+/* Press on a selected row — a separate rule for the same reason as the card's:
+   a background press collides with the selected surface instead of composing
+   with it, so it has to out-specify the block above. Deliberately the same
+   specificity shape as the card's companion (one class + one attribute + the
+   pseudo-class) so the disabled block below, which is that same weight and
+   comes later, still overrides it. */
+.mob-list-row--interactive:is([data-mob-selected], [aria-selected='true']):active {
+  background: var(--mob-card-bg-selected-pressed);
+}
+.mob-list-row:is([data-mob-selected], [aria-selected='true'], [aria-current]:not([aria-current='false']))
+  .mob-list-row__name {
+  color: var(--mob-fg-primary);
+}
+
+/* A row whose data failed: the entity is still there, its number is not. The
+   value goes unknown rather than red, and the sub line carries the message —
+   one red thing in a row, not two. */
+.mob-list-row[data-mob-error] .mob-list-row__value { color: var(--mob-fg-dim); }
+.mob-list-row[data-mob-error] .mob-list-row__sub   { color: var(--mob-negative); }
+
+.mob-list-row[data-mob-loading] { cursor: progress; }
+.mob-list-row[data-mob-loading].mob-list-row--interactive:hover { background: none; }
+.mob-list-row[data-mob-loading].mob-list-row--interactive:active { background: none; }
+
+.mob-list-row:disabled,
+.mob-list-row[aria-disabled='true'],
+.mob-list-row[data-mob-disabled],
+.mob-list-row:disabled:hover,
+.mob-list-row[aria-disabled='true']:hover,
+.mob-list-row[data-mob-disabled]:hover {
+  background: none;
+  cursor: not-allowed;
+  --mob-avatar-tint: var(--mob-bg-tile);
+  --mob-avatar-fg: var(--mob-fg-disabled);
+  --mob-series-fg: var(--mob-fg-disabled);
+}
+.mob-list-row:is(:disabled, [aria-disabled='true'], [data-mob-disabled])
+  :is(.mob-list-row__name, .mob-list-row__value) {
+  color: var(--mob-fg-disabled);
+}
+.mob-list-row:is(:disabled, [aria-disabled='true'], [data-mob-disabled]) .mob-list-row__sub {
+  color: var(--mob-fg-dim);
+}
+.mob-list-row:disabled:active,
+.mob-list-row[aria-disabled='true']:active,
+.mob-list-row[data-mob-disabled]:active { background: none; }
+
+/* =============================================================================
+   AVATAR  [src]
+   A round tinted circle with a letter glyph, or a token image. Colour comes from
+   the --mob-avatar-tint / --mob-avatar-fg pair, which is left unset so it can be
+   inherited from any ancestor; unset, it falls back to the neutral series.
+   ============================================================================= */
+.mob-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: var(--mob-avatar-size, var(--mob-avatar-md));
+  block-size: var(--mob-avatar-size, var(--mob-avatar-md));
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-avatar-tint, var(--mob-series-8-tint));
+  color: var(--mob-avatar-fg, var(--mob-series-8-glyph));
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-2xs); /* [src] 10px glyph in a 24 or 28px circle */
+  line-height: var(--mob-leading-flat);
+  text-transform: uppercase;
+  overflow: hidden;
+  user-select: none;
+}
+.mob-avatar > img,
+.mob-avatar > svg {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+}
+
+.mob-avatar--sm { --mob-avatar-size: var(--mob-avatar-sm); font-size: var(--mob-size-3xs); }
+.mob-avatar--md { --mob-avatar-size: var(--mob-avatar-md); }
+.mob-avatar--lg { --mob-avatar-size: var(--mob-avatar-lg); }
+
+/* --- Stack -----------------------------------------------------------------
+   Overlapped marks for a pair (a pool, a route, a set of holders). The ring is
+   painted in the surface colour behind the stack, so the overlap reads as a
+   cut-out rather than as a bordered badge. Override --mob-avatar-ring on the
+   surface, not on the avatar — .mob-card--sunken already does. */
+.mob-avatar-stack { display: inline-flex; align-items: center; }
+.mob-avatar-stack > .mob-avatar {
+  border: var(--mob-avatar-ring-w) solid var(--mob-avatar-ring, var(--mob-card-bg));
+}
+.mob-avatar-stack > * + * { margin-inline-start: var(--mob-avatar-overlap); }
+
+/* =============================================================================
+   SERIES WIRING
+   data-mob-series="1".."8" on a card, a segment, a row or an avatar sets the
+   entity colour for everything inside it: the avatar's tint/glyph pair and the
+   flat series colour used by the share. One attribute, three properties, so an
+   asset can never be blue in the avatar and teal in the number.
+
+   Scoped to this file's blocks on purpose. If the system later hoists this
+   mapping into base.css, delete this section rather than keeping two copies.
+   ============================================================================= */
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='1'] { --mob-avatar-tint: var(--mob-series-1-tint); --mob-avatar-fg: var(--mob-series-1-glyph); --mob-series-fg: var(--mob-series-1); }
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='2'] { --mob-avatar-tint: var(--mob-series-2-tint); --mob-avatar-fg: var(--mob-series-2-glyph); --mob-series-fg: var(--mob-series-2); }
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='3'] { --mob-avatar-tint: var(--mob-series-3-tint); --mob-avatar-fg: var(--mob-series-3-glyph); --mob-series-fg: var(--mob-series-3); }
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='4'] { --mob-avatar-tint: var(--mob-series-4-tint); --mob-avatar-fg: var(--mob-series-4-glyph); --mob-series-fg: var(--mob-series-4); }
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='5'] { --mob-avatar-tint: var(--mob-series-5-tint); --mob-avatar-fg: var(--mob-series-5-glyph); --mob-series-fg: var(--mob-series-5); }
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='6'] { --mob-avatar-tint: var(--mob-series-6-tint); --mob-avatar-fg: var(--mob-series-6-glyph); --mob-series-fg: var(--mob-series-6); }
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='7'] { --mob-avatar-tint: var(--mob-series-7-tint); --mob-avatar-fg: var(--mob-series-7-glyph); --mob-series-fg: var(--mob-series-7); }
+:is(.mob-card, .mob-segmented, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='8'] { --mob-avatar-tint: var(--mob-series-8-tint); --mob-avatar-fg: var(--mob-series-8-glyph); --mob-series-fg: var(--mob-series-8); }
+
+/* Accent-tinted mark, for an entity that is the product's own (a position, a
+   ladder) rather than one of the categorical series. */
+:is(.mob-card, .mob-segmented__seg, .mob-list-row, .mob-avatar-stack, .mob-avatar)[data-mob-series='accent'] {
+  --mob-avatar-tint: var(--mob-accent-tint-strong);
+  --mob-avatar-fg: var(--mob-accent-bright);
+  --mob-series-fg: var(--mob-accent-soft);
+}
+

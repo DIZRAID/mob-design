@@ -1,0 +1,178 @@
+/* =============================================================================
+   mob-design — base + type roles
+   -----------------------------------------------------------------------------
+   The identity of this system is a two-family split:
+
+     MONO (IBM Plex Mono, tabular-nums)  every number, control label, tag,
+                                         timestamp, address, metadata
+     SANS (system UI, 600, -0.02em)      headings, and figures large enough to
+                                         act as headings
+
+   Mono is the default; sans is applied by role. The crossover is not one
+   threshold but two, and the source is consistent about both:
+
+     headings   sans from 14px up          — a heading is never mono
+     figures    mono up to 16px,           — the 16px FEES/LOOSE values are mono;
+                sans from 22px up            the 22/23/27px heroes are sans
+
+   Nothing in the calibrated source sits between 16px and 22px as a figure, and
+   nothing should: that gap is the line between "a number in a layout" and "a
+   number that IS the layout". Body copy longer than a sentence or two moves to
+   sans at 1.45+ leading — mono paragraphs are hostile to read.
+   ============================================================================= */
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--mob-bg-canvas);
+  color: var(--mob-fg-primary);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-lg);
+  line-height: var(--mob-leading-normal);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--mob-selection-bg); color: var(--mob-fg-primary); }
+
+/* Scrollbars: part of the surface, not a system artefact bolted on top. */
+* { scrollbar-width: thin; scrollbar-color: var(--mob-border-strong) transparent; }
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--mob-border-strong);
+  border: 3px solid transparent;
+  border-radius: var(--mob-radius-full);
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--mob-border-hover); background-clip: content-box; }
+
+/* --- Global focus contract -------------------------------------------------
+   Every focusable thing gets a visible ring, including elements a component
+   author forgot about. Components may refine the ring; they may not delete it. */
+:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-radius-sm);
+}
+
+a { color: var(--mob-fg-link); text-decoration: none; }
+a:hover { color: var(--mob-fg-link-hover); }
+
+/* =============================================================================
+   TYPE ROLES
+   Use these classes instead of ad-hoc font-size. If a screen needs a size that
+   is not here, the screen is probably wrong — or the scale needs a new role,
+   which is a system decision, not a screen decision.
+   ============================================================================= */
+
+/* --- Display & headings — sans, 600, tight. Marketing and page titles. ---- */
+.mob-display-xl,
+.mob-display-lg,
+.mob-display-md,
+.mob-heading-xl,
+.mob-heading-lg,
+.mob-heading-md,
+.mob-heading-sm {
+  font-family: var(--mob-font-sans);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  color: var(--mob-fg-primary);
+}
+.mob-display-xl { font-size: clamp(40px, 6.4vw, var(--mob-size-12xl)); line-height: var(--mob-leading-display); }
+.mob-display-lg { font-size: clamp(34px, 5vw,   var(--mob-size-11xl)); line-height: var(--mob-leading-display); }
+.mob-display-md { font-size: clamp(28px, 3.6vw, var(--mob-size-10xl)); line-height: var(--mob-leading-tight); }
+.mob-heading-xl { font-size: clamp(24px, 2.6vw, var(--mob-size-9xl));  line-height: var(--mob-leading-tight); }
+.mob-heading-lg { font-size: var(--mob-size-8xl); line-height: var(--mob-leading-tight); }
+.mob-heading-md { font-size: var(--mob-size-4xl); line-height: var(--mob-leading-snug); }
+.mob-heading-sm { font-size: var(--mob-size-2xl); line-height: var(--mob-leading-snug); }
+
+/* Section / column title — the 14px sans 600 that opens every column. */
+.mob-title {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-xl);
+  font-weight: var(--mob-weight-semibold);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+
+/* --- Figures — the crossover lives here. .mob-figure-sm is deliberately MONO
+       at 16px; every larger step is sans. See the header comment. ----------- */
+.mob-figure-xl { font-family: var(--mob-font-sans); font-size: var(--mob-size-7xl); font-weight: 600; letter-spacing: var(--mob-tracking-tight); line-height: var(--mob-leading-tight); }
+.mob-figure-lg { font-family: var(--mob-font-sans); font-size: var(--mob-size-6xl); font-weight: 600; letter-spacing: var(--mob-tracking-tight); line-height: var(--mob-leading-tight); }
+.mob-figure-md { font-family: var(--mob-font-sans); font-size: var(--mob-size-5xl); font-weight: 600; letter-spacing: var(--mob-tracking-tight); line-height: var(--mob-leading-tight); }
+.mob-figure-sm { font-family: var(--mob-font-mono); font-size: var(--mob-size-3xl); line-height: var(--mob-leading-tight); }
+
+/* --- Body ---------------------------------------------------------------- */
+.mob-body-lg { font-family: var(--mob-font-sans); font-size: var(--mob-size-4xl); line-height: var(--mob-leading-relaxed); color: var(--mob-fg-secondary); letter-spacing: 0; }
+.mob-body    { font-family: var(--mob-font-sans); font-size: var(--mob-size-lg);  line-height: var(--mob-leading-relaxed); color: var(--mob-fg-secondary); letter-spacing: 0; }
+.mob-body-sm { font-family: var(--mob-font-sans); font-size: var(--mob-size-md);  line-height: var(--mob-leading-normal);  color: var(--mob-fg-muted); letter-spacing: 0; }
+
+/* --- Values & metadata — always mono, always tabular. --------------------- */
+.mob-value    { font-size: var(--mob-size-xl);   color: var(--mob-fg-primary); }
+.mob-value-sm { font-size: var(--mob-size-base); color: var(--mob-fg-secondary); }
+.mob-meta     { font-size: var(--mob-size-xs);   color: var(--mob-fg-label); line-height: var(--mob-leading-snug); }
+.mob-meta-sm  { font-size: var(--mob-size-2xs);  color: var(--mob-fg-label); line-height: var(--mob-leading-snug); }
+.mob-dim      { font-size: var(--mob-size-3xs);  color: var(--mob-fg-dim); }
+
+/* --- Micro-label — the uppercase 9.5px/.7px that titles every data block. -- */
+.mob-label {
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+  text-transform: uppercase;
+}
+
+/* --- Control label ------------------------------------------------------- */
+.mob-control-label { font-size: var(--mob-size-sm); line-height: var(--mob-leading-flat); }
+
+/* =============================================================================
+   TONE UTILITIES
+   Colour carries meaning here, so it is applied by tone, not by hex. A number
+   that flips sign flips tone; nothing else about it changes.
+   ============================================================================= */
+.mob-tone-primary   { color: var(--mob-fg-primary); }
+.mob-tone-secondary { color: var(--mob-fg-secondary); }
+.mob-tone-muted     { color: var(--mob-fg-muted); }
+.mob-tone-label     { color: var(--mob-fg-label); }
+.mob-tone-dim       { color: var(--mob-fg-dim); }
+.mob-tone-accent    { color: var(--mob-accent-bright); }
+.mob-tone-positive  { color: var(--mob-positive); }
+.mob-tone-negative  { color: var(--mob-negative); }
+.mob-tone-warning   { color: var(--mob-warning); }
+.mob-tone-info      { color: var(--mob-info); }
+
+/* Signed values: bind the tone to the data, not to the markup, so a component
+   never has to branch on sign in two places. */
+[data-mob-sign='positive'] { color: var(--mob-positive); }
+[data-mob-sign='negative'] { color: var(--mob-negative); }
+[data-mob-sign='neutral']  { color: var(--mob-fg-secondary); }
+
+.mob-nums     { font-variant-numeric: tabular-nums; }
+.mob-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mob-nowrap   { white-space: nowrap; }
+
+/* Screen-reader-only, for the label a sighted user gets from an icon. */
+.mob-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
+
+/* Mobile hit-target floor. Applies to anything the system considers a control,
+   without changing its painted size. */
+@media (pointer: coarse) {
+  .mob-btn, .mob-icon-btn, .mob-tab, .mob-menu-item, .mob-chip[data-mob-interactive] {
+    position: relative;
+  }
+  .mob-btn::after, .mob-icon-btn::after, .mob-tab::after, .mob-menu-item::after {
+    content: '';
+    position: absolute;
+    inset: 50% auto auto 50%;
+    translate: -50% -50%;
+    min-width: var(--mob-tap-target);
+    min-height: var(--mob-tap-target);
+    width: 100%;
+    height: 100%;
+  }
+}

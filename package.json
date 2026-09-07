@@ -1,0 +1,52 @@
+{
+  "name": "mob-design",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Dark-native design system for dense product UI. Three tiers of CSS custom properties, a dual mono/sans type contract, depth from surface plus a 1px border rather than shadow, and three density zones that move rhythm without moving control geometry. Ships as source: CSS, a Tailwind preset, and W3C design-token JSON. No dependencies, no build step.",
+  "license": "MIT",
+
+  "//": "css/tokens.css is the source of truth for every value. tokens/*.json and tailwind/preset.js are mirrors of it — see tokens/README.md for how to verify they still match.",
+
+  "sideEffects": [
+    "*.css",
+    "./css/*.css",
+    "./css/components/*.css"
+  ],
+
+  "exports": {
+    ".": "./css/mob.css",
+    "./css/mob.css": "./css/mob.css",
+    "./css/*": "./css/*",
+    "./tailwind/preset.js": "./tailwind/preset.js",
+    "./tokens/*.json": "./tokens/*.json",
+    "./package.json": "./package.json"
+  },
+
+  "files": [
+    "css",
+    "tailwind",
+    "tokens",
+    "react",
+    "docs",
+    "README.md"
+  ],
+
+  "keywords": [
+    "design-system",
+    "design-tokens",
+    "w3c-design-tokens",
+    "css-variables",
+    "css-custom-properties",
+    "tailwind",
+    "tailwind-preset",
+    "dark-mode",
+    "theming",
+    "dashboard",
+    "data-dense",
+    "ui"
+  ],
+
+  "scripts": {
+    "//": "Intentionally empty. This package ships as source — the CSS is the artefact, the JSON mirrors are hand-maintained, and the Tailwind preset is plain CommonJS. Adding a build step would put a compiled copy of the tokens between the design system and the product, which is the drift this system is built to avoid."
+  }
+}

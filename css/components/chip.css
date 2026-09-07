@@ -1,0 +1,418 @@
+/* =============================================================================
+   mob-design — chip / badge / tag
+   -----------------------------------------------------------------------------
+   The 10.5px mono pill that carries a chain name, a count, a status or a filter.
+   Two of them are [src]: "Robinhood Chain" in the portfolio header row and
+   "1 ladders · 1 rungs" in the open-positions header row. They are the same
+   component — the prototype painted them on two surfaces one unit apart
+   (#131417 / #141519), which is a prototype accident and not a design decision.
+   This file collapses both onto --mob-chip-bg.
+
+   ANATOMY
+     ┌────────────────────────────────┐
+     │ ●  Above · sold             ×  │   min-block-size --mob-chip-h (22px)
+     └────────────────────────────────┘
+       │  │                          └── .mob-chip__remove   (--removable)
+       │  └───────────────────────────── .mob-chip__label    (or a bare text node)
+       └──────────────────────────────── .mob-chip__dot      (optional)
+
+   RULES FOR A CONSUMER
+   1. A chip carries a fragment, never a sentence. "Above · sold", "V4", "1 rungs",
+      "Robinhood Chain" — a status, a category, a filter, a count. If the string
+      needs a verb, it is a message and belongs in a banner or a toast, not here.
+      A chip never wraps: long text either truncates (.mob-truncate on __label)
+      or the string is wrong.
+   2. Colour is never the only signal. Every tone below is legible as text first;
+      __dot is a redundant mark, not the message. Write "Above · sold", not a
+      bare red dot, and never rely on --positive vs --negative alone to tell two
+      states apart.
+   3. An interactive chip carries data-mob-interactive. Not the element type —
+      base.css sizes the coarse-pointer hit target off that attribute, so a
+      <button class="mob-chip"> without it is a bug. A static chip is a <span>.
+   4. Selection is announced, not just painted: aria-pressed on a filter toggle,
+      aria-selected on an option, aria-current on a nav chip. The styles key off
+      those attributes, so getting the markup right gets the visuals for free.
+   5. --removable ships a real <button> with an accessible name
+      (aria-label="Remove NUDES" or a .mob-sr-only span). Never a bare glyph.
+
+   VARIANT VOCABULARY — two names in it map to no class, on purpose:
+     --neutral   the default tone. Its three values live once, in tokens.css.
+     --outline   the default treatment. `.mob-chip` IS the outline chip.
+     --md        the default size, declared on `.mob-chip` itself.
+   A component API may emit those class names unconditionally; they match
+   nothing and change nothing, which is exactly right. Restating their values
+   here would give the system two sources for one number, which is how two chips
+   drift a unit apart.
+
+   TONE CONSTRUCTION
+   A tone modifier binds one triplet — tone / tone-raised / tone-tint — plus its
+   three solid values. One shared rule turns that triplet into every painted
+   role, at fixed mix ratios over the tint:
+       border  22%   ·   border hover  36%   ·   border selected  48%
+       bg rest  0%   ·   bg hover      10%   ·   bg selected      16%
+   Adding a tone means adding six bindings and one selector to that rule. It
+   never means writing a colour.
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   tokens.css already owns the [src] neutral chip: --mob-chip-bg, --mob-chip-border,
+   --mob-chip-fg, --mob-chip-pad-y (3px), --mob-chip-pad-x (8px), --mob-chip-radius.
+   Those are not restated here. What follows is what this file adds.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Geometry */
+  --mob-chip-fs:          var(--mob-size-xs);   /* [src] 10.5px                 */
+  --mob-chip-h:           22px;                 /* [drv] see note below         */
+  --mob-chip-gap:         5px;                  /* [drv] dot/icon -> label      */
+  --mob-chip-pad-x-tight: var(--mob-space-4);   /* [drv] edge next to the ×     */
+  --mob-chip-fs-sm:       var(--mob-size-2xs);  /* [drv] 10px                   */
+  --mob-chip-pad-y-sm:    var(--mob-space-2);   /* [drv]                        */
+  --mob-chip-pad-x-sm:    var(--mob-space-6);   /* [drv]                        */
+  --mob-chip-h-sm:        18px;                 /* [drv]                        */
+  --mob-chip-dot-size:    5px;                  /* [drv]                        */
+  --mob-chip-dot-color:   currentColor;         /* [drv] override per instance  */
+  --mob-chip-icon-size:   12px;                 /* [drv] 10.5px label + 1.5     */
+  --mob-chip-remove-size: 12px;                 /* [drv] matches the icon box   */
+  --mob-chip-skeleton-w:  9ch;                  /* [drv] ch, so it tracks --fs  */
+  --mob-chip-group-gap:   var(--mob-space-6);   /* [drv]                        */
+
+  /* --mob-chip-h: the [src] chip has no declared height — 3px padding, a 1px
+     border and a browser-default line box on 10.5px mono measure 22.7px. Pinned
+     to 22px so the height is deterministic whether or not the webfont has
+     loaded, and so a chip and a --mob-meter-h bin row sit on one baseline. */
+
+  /* Neutral state colours. The rest state is in tokens.css; these are the three
+     states it does not cover. Tone modifiers rebind all of them. */
+  --mob-chip-bg-hover:        var(--mob-bg-hover);
+  --mob-chip-border-hover:    var(--mob-border-hover);
+  --mob-chip-fg-hover:        var(--mob-fg-secondary);
+  --mob-chip-bg-selected:     var(--mob-bg-selected);
+  --mob-chip-border-selected: var(--mob-border-strong);
+  --mob-chip-fg-selected:     var(--mob-fg-primary);
+
+  /* Filled treatment (--solid). Neutral defaults; tone modifiers rebind. */
+  --mob-chip-solid-bg:       var(--mob-bg-active);
+  --mob-chip-solid-bg-hover: var(--mob-bg-hover);
+  --mob-chip-solid-fg:       var(--mob-fg-primary);
+}
+
+/* -----------------------------------------------------------------------------
+   BLOCK
+   -------------------------------------------------------------------------- */
+.mob-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mob-chip-gap);
+  min-block-size: var(--mob-chip-h);
+  padding-block: var(--mob-chip-pad-y);
+  padding-inline: var(--mob-chip-pad-x);
+  border: var(--mob-border-width) solid var(--mob-chip-border);
+  border-radius: var(--mob-chip-radius);
+  background-color: var(--mob-chip-bg);
+  color: var(--mob-chip-fg);
+
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-chip-fs);
+  font-weight: var(--mob-weight-regular);
+  /* Flat leading + min-block-size + centring: the box is set by the token, not
+     by whichever line box the loaded font happens to produce. */
+  line-height: var(--mob-leading-flat);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--mob-tracking-normal);
+  text-decoration: none;      /* an <a class="mob-chip"> is a chip, not a link */
+  white-space: nowrap;
+  vertical-align: middle;     /* for a chip sitting inline in running text     */
+}
+
+/* -----------------------------------------------------------------------------
+   ELEMENTS
+   -------------------------------------------------------------------------- */
+
+/* The label. Only needed when the chip also holds a dot, an icon or a ×, or
+   when it has to truncate — a bare text node is a flex item too, so the gap
+   applies either way. Compose with .mob-truncate to clip a long value. */
+.mob-chip__label {
+  min-inline-size: 0;
+}
+
+/* Redundant status mark. Inherits the tone through currentColor; override
+   --mob-chip-dot-color inline to mark a row on an otherwise neutral chip. */
+.mob-chip__dot {
+  flex: 0 0 auto;
+  inline-size: var(--mob-chip-dot-size);
+  block-size: var(--mob-chip-dot-size);
+  border-radius: var(--mob-radius-full);
+  background-color: var(--mob-chip-dot-color);
+}
+
+.mob-chip__icon {
+  flex: 0 0 auto;
+  inline-size: var(--mob-chip-icon-size);
+  block-size: var(--mob-chip-icon-size);
+  fill: currentColor;
+  stroke: currentColor;
+}
+
+/* Trailing × — a real button, focusable and labelled. The hover wash is mixed
+   from the chip's own text colour so it lands correctly on every tone and in
+   both themes without a second set of tokens. */
+.mob-chip__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: var(--mob-chip-remove-size);
+  block-size: var(--mob-chip-remove-size);
+  border-radius: var(--mob-radius-2xs);
+  background-color: transparent;
+  color: inherit;
+  font-size: inherit;
+  line-height: var(--mob-leading-flat);
+  cursor: pointer;
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-chip__remove > svg {
+  inline-size: 100%;
+  block-size: 100%;
+  fill: currentColor;
+  stroke: currentColor;
+}
+.mob-chip__remove:hover {
+  background-color: color-mix(in srgb, currentColor 14%, transparent);
+}
+.mob-chip__remove:active {
+  transform: scale(var(--mob-press-scale));
+}
+/* Inset ring: the global ring spreads 4px outward and would break out of a
+   22px chip. Same colour, same contract, contained. */
+.mob-chip__remove:focus-visible {
+  box-shadow: var(--mob-focus-ring-inset);
+  border-radius: var(--mob-radius-2xs);
+}
+
+/* -----------------------------------------------------------------------------
+   TONES
+   Each modifier binds a triplet and its solid values. Nothing here paints.
+   -------------------------------------------------------------------------- */
+.mob-chip--accent {
+  --mob-chip-tone:           var(--mob-accent-bright);
+  /* No brighter member exists above accent-bright, so the accent chip spends
+     its hover on bg and border instead of on the text. */
+  --mob-chip-tone-raised:    var(--mob-accent-bright);
+  --mob-chip-tone-tint:      var(--mob-accent-tint);
+  /* Solid accent uses the pair the token layer already declares legible —
+     --mob-accent with --mob-fg-on-accent, the calibrated primary button. */
+  --mob-chip-solid-bg:       var(--mob-accent);
+  --mob-chip-solid-bg-hover: var(--mob-accent-hover);
+  --mob-chip-solid-fg:       var(--mob-fg-on-accent);
+}
+.mob-chip--positive {
+  --mob-chip-tone:           var(--mob-positive);
+  --mob-chip-tone-raised:    var(--mob-positive-raised);
+  --mob-chip-tone-tint:      var(--mob-positive-tint);
+  --mob-chip-solid-bg:       var(--mob-positive);
+  --mob-chip-solid-bg-hover: var(--mob-positive-raised);
+  --mob-chip-solid-fg:       var(--mob-fg-inverse);
+}
+.mob-chip--warning {
+  --mob-chip-tone:           var(--mob-warning);
+  --mob-chip-tone-raised:    var(--mob-warning-raised);
+  --mob-chip-tone-tint:      var(--mob-warning-tint);
+  --mob-chip-solid-bg:       var(--mob-warning);
+  --mob-chip-solid-bg-hover: var(--mob-warning-raised);
+  --mob-chip-solid-fg:       var(--mob-fg-inverse);
+}
+.mob-chip--negative {
+  --mob-chip-tone:           var(--mob-negative);
+  --mob-chip-tone-raised:    var(--mob-negative-raised);
+  --mob-chip-tone-tint:      var(--mob-negative-tint);
+  --mob-chip-solid-bg:       var(--mob-negative);
+  --mob-chip-solid-bg-hover: var(--mob-negative-raised);
+  --mob-chip-solid-fg:       var(--mob-fg-inverse);
+}
+.mob-chip--info {
+  --mob-chip-tone:           var(--mob-info);
+  --mob-chip-tone-raised:    var(--mob-info-raised);
+  --mob-chip-tone-tint:      var(--mob-info-tint);
+  --mob-chip-solid-bg:       var(--mob-info);
+  --mob-chip-solid-bg-hover: var(--mob-info-raised);
+  --mob-chip-solid-fg:       var(--mob-fg-inverse);
+}
+
+/* The one rule that paints a tone. Neutral is deliberately absent: its values
+   are measured, not computed, and they live in tokens.css. */
+.mob-chip--accent,
+.mob-chip--positive,
+.mob-chip--warning,
+.mob-chip--negative,
+.mob-chip--info {
+  --mob-chip-bg:              var(--mob-chip-tone-tint);
+  --mob-chip-border:          color-mix(in srgb, var(--mob-chip-tone) 22%, var(--mob-chip-tone-tint));
+  --mob-chip-fg:              var(--mob-chip-tone);
+  --mob-chip-bg-hover:        color-mix(in srgb, var(--mob-chip-tone) 10%, var(--mob-chip-tone-tint));
+  --mob-chip-border-hover:    color-mix(in srgb, var(--mob-chip-tone) 36%, var(--mob-chip-tone-tint));
+  --mob-chip-fg-hover:        var(--mob-chip-tone-raised);
+  --mob-chip-bg-selected:     color-mix(in srgb, var(--mob-chip-tone) 16%, var(--mob-chip-tone-tint));
+  --mob-chip-border-selected: color-mix(in srgb, var(--mob-chip-tone) 48%, var(--mob-chip-tone-tint));
+  --mob-chip-fg-selected:     var(--mob-chip-tone-raised);
+}
+
+/* -----------------------------------------------------------------------------
+   VARIANTS
+   Must follow the tone rule above: they override what it computed.
+   -------------------------------------------------------------------------- */
+
+/* Filled. Built for a count, where the number is the whole content and the
+   fill is what makes it findable. The border is painted in the fill colour
+   rather than removed, so a solid and an outline chip are the same size. */
+.mob-chip--solid {
+  --mob-chip-bg:              var(--mob-chip-solid-bg);
+  --mob-chip-border:          var(--mob-chip-solid-bg);
+  --mob-chip-fg:              var(--mob-chip-solid-fg);
+  --mob-chip-bg-hover:        var(--mob-chip-solid-bg-hover);
+  --mob-chip-border-hover:    var(--mob-chip-solid-bg-hover);
+  --mob-chip-fg-hover:        var(--mob-chip-solid-fg);
+  --mob-chip-bg-selected:     var(--mob-chip-solid-bg-hover);
+  --mob-chip-border-selected: var(--mob-chip-solid-bg-hover);
+  --mob-chip-fg-selected:     var(--mob-chip-solid-fg);
+  /* A single digit stays a square-ish token instead of a sliver. */
+  min-inline-size: var(--mob-chip-h);
+}
+
+/* Trailing ×: the end padding tightens so the button sits at the optical edge
+   instead of a full label's distance from it. */
+.mob-chip--removable {
+  padding-inline-end: var(--mob-chip-pad-x-tight);
+}
+
+/* -----------------------------------------------------------------------------
+   SIZES
+   --md is the default and is declared on .mob-chip itself.
+   -------------------------------------------------------------------------- */
+/* Rebinds the padding tokens rather than only setting padding, because the
+   loading skeleton insets itself off --mob-chip-pad-*; a --sm chip that set its
+   padding directly would get a bar cut to the --md padding. */
+.mob-chip--sm {
+  --mob-chip-pad-y: var(--mob-chip-pad-y-sm);
+  --mob-chip-pad-x: var(--mob-chip-pad-x-sm);
+  min-block-size: var(--mob-chip-h-sm);
+  padding-block: var(--mob-chip-pad-y);
+  padding-inline: var(--mob-chip-pad-x);
+  font-size: var(--mob-chip-fs-sm);
+}
+.mob-chip--sm.mob-chip--solid    { min-inline-size: var(--mob-chip-h-sm); }
+.mob-chip--sm.mob-chip--removable { padding-inline-end: var(--mob-chip-pad-x-tight); }
+
+/* -----------------------------------------------------------------------------
+   STATES
+   Every interactive state is gated on data-mob-interactive AND on the chip being
+   neither disabled nor loading, so a dead chip cannot light up under the cursor.
+   -------------------------------------------------------------------------- */
+.mob-chip[data-mob-interactive] {
+  cursor: pointer;
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color var(--mob-duration-fast) var(--mob-ease-standard),
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* Hover — the tone gains saturation only here. */
+.mob-chip[data-mob-interactive]:not(:disabled, [aria-disabled='true'], [data-mob-loading]):hover {
+  --mob-chip-bg:     var(--mob-chip-bg-hover);
+  --mob-chip-border: var(--mob-chip-border-hover);
+  --mob-chip-fg:     var(--mob-chip-fg-hover);
+}
+
+/* Pressed. Transform only — nothing in the row moves. */
+.mob-chip[data-mob-interactive]:not(:disabled, [aria-disabled='true'], [data-mob-loading]):active {
+  transform: scale(var(--mob-press-scale));
+}
+
+/* Selected. Keyed to the attribute that already tells a screen reader the same
+   thing, so the two can never disagree. Placed after hover: a selected chip
+   keeps reading as selected while the pointer is over it. */
+.mob-chip[data-mob-interactive]:not(:disabled, [aria-disabled='true'], [data-mob-loading]):is(
+  [aria-pressed='true'],
+  [aria-selected='true'],
+  [aria-current='true'],
+  [aria-current='page']
+) {
+  --mob-chip-bg:     var(--mob-chip-bg-selected);
+  --mob-chip-border: var(--mob-chip-border-selected);
+  --mob-chip-fg:     var(--mob-chip-fg-selected);
+}
+
+/* Coarse pointers: base.css sets position: relative on an interactive chip but
+   deliberately does not inflate its hit box the way it does for .mob-btn and
+   .mob-tab, and this file does not either — a 44px target around a 22px chip
+   would overlap its neighbours in a wrapped group and fire the wrong filter.
+   Give touch surfaces room instead: --md rather than --sm, and enough
+   --mob-chip-group-gap that the chips are not shoulder to shoulder. A chip is
+   not the right control for a primary touch action; a button is. */
+
+/* Focus. The global ring stands; only its radius is corrected — base.css rounds
+   the ring to --mob-radius-sm, which would jump a 6px chip to 8px on focus. */
+.mob-chip:focus-visible {
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-chip-radius);
+}
+
+/* Disabled. Contrast drops AND the affordance goes: the border falls back to
+   the divider step, so the chip stops reading as a control at all. Works for
+   :disabled on a <button> and aria-disabled on anything that must stay
+   focusable enough to explain itself. */
+.mob-chip:is(:disabled, [aria-disabled='true']) {
+  --mob-chip-bg:     var(--mob-bg-disabled);
+  --mob-chip-border: var(--mob-border-subtle);
+  --mob-chip-fg:     var(--mob-fg-disabled);
+  cursor: not-allowed;
+}
+
+/* Loading. The box is untouched — padding, border, radius and height all stay,
+   the label just goes transparent and a skeleton bar takes its place. An empty
+   chip is held open by --mob-chip-skeleton-w, so nothing resizes when the value
+   arrives. Pair with aria-busy="true". */
+.mob-chip[data-mob-loading] {
+  position: relative;
+  min-inline-size: var(--mob-chip-skeleton-w);
+  color: transparent;
+  pointer-events: none;
+}
+.mob-chip[data-mob-loading]::after {
+  content: '';
+  position: absolute;
+  inset-block: var(--mob-chip-pad-y);
+  inset-inline: var(--mob-chip-pad-x);
+  border-radius: var(--mob-radius-2xs);
+  background-color: var(--mob-bg-tile);   /* [src] skeleton surface */
+  /* No duration token is long enough for a breathing skeleton, so the period is
+     derived: 5 × --mob-duration-enter = 1300ms. reset.css flattens it under
+     prefers-reduced-motion. */
+  animation: mob-pulse calc(var(--mob-duration-enter) * 5)
+             var(--mob-ease-standard) infinite alternate;
+}
+/* Error is a tone, not a state: a chip that reports a failure is
+   .mob-chip--negative with a label that says what failed. There is nothing for
+   an invalid-input state to mean on a component that holds no input. */
+
+/* -----------------------------------------------------------------------------
+   GROUP
+   A wrapping row of chips with one gap. Use it for filter rows, tag lists and
+   the header cluster; do not hand-space chips with margins.
+   -------------------------------------------------------------------------- */
+.mob-chip-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mob-chip-group-gap);
+  min-inline-size: 0;
+}

@@ -1,0 +1,655 @@
+/* =============================================================================
+   mob-design — choice
+   -----------------------------------------------------------------------------
+   Checkbox, radio, toggle, choice row and segmented control. Everything here is
+   built the same way: a REAL native input, made invisible but left in the
+   document, plus a styled sibling that does the drawing.
+
+     <label class="mob-checkbox">
+       <input type="checkbox" class="mob-checkbox__input">
+       <span class="mob-checkbox__box"></span>
+       <span class="mob-checkbox__label">Auto-claim above $2.00</span>
+     </label>
+
+   Why the native input instead of a div with role="checkbox": Tab order, Space,
+   arrow-key group navigation inside a radio name, the :checked / :indeterminate /
+   :disabled pseudo-classes, form submission, autofill, screen-reader role and
+   state announcements, and every assistive-tech quirk we will never think of —
+   all of it is free, and none of it can regress. The input is
+   `position:absolute; opacity:0; pointer-events:none` — hidden, never removed.
+   Do NOT swap it for `display:none` or `visibility:hidden`: both take it out of
+   the tab order and out of the accessibility tree, which is the entire point.
+
+   ANATOMY
+
+     .mob-checkbox / .mob-radio / .mob-toggle       the <label>. Owns state.
+     ├── …__input                                   native, invisible, focusable
+     ├── …__box / .mob-toggle__track                the drawn control
+     │       (marks and the toggle knob are pseudo-elements of it)
+     └── …__label                                   the text, optional
+
+     .mob-choice-row                                a layout companion: apply it
+     └── .mob-choice-row__text                      to the SAME <label> element
+         ├── .mob-choice-row__title                 (never nest one label in
+         └── .mob-choice-row__desc                   another — invalid HTML)
+
+     .mob-segmented-control                         the 1px-gap frame
+     └── .mob-segmented-control__item               <button> or <label>
+         └── .mob-segmented-control__label          only for a label long enough
+                                                    to need an ellipsis
+
+   THE NAME. This block is .mob-segmented-control, not the shorter
+   .mob-segmented, because card.css already owns that one — the fused card row,
+   the signature construction of the system, documented in docs/. Two different
+   components cannot share a block name: card.css loads after this file, so the
+   short name gave every segmented control the card's 12px radius and gave every
+   fused card this control's 34px block-size. Same construction technique, two
+   sizes of object, two names.
+
+   STATES shipped for every control here: default, hover, focus-visible, pressed,
+   selected/checked, indeterminate (checkbox), invalid, loading, disabled.
+
+   RULES FOR CONSUMERS
+   - Radio uses the checkbox's geometry token, not a copy of it. A radio and a
+     checkbox in the same form are the same size to the pixel, always.
+   - A disabled CHECKED control is not accent-filled. Accent means "live"; a
+     dead control that still glows is the anti-pattern the states matrix exists
+     to prevent.
+   - Loading keeps the visual state the user just chose and pulses it. It does
+     not add `disabled`, because that would erase the answer they gave. Block the
+     change in your handler and set aria-busy="true" on the input.
+   - The knob and the checkmark move with `transform` only. Nothing in this file
+     transitions a geometric property.
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   -------------------------------------------------------------------------- */
+:root {
+  /* One control size for checkbox and radio. 16px is --mob-control-icon, so a
+     choice control sits in the same optical column as a leading icon. */
+  --mob-choice-size:   var(--mob-control-icon);
+  --mob-choice-radius: var(--mob-radius-2xs);
+  --mob-choice-gap:    var(--mob-space-8); /* control -> label                 */
+
+  --mob-choice-mark-stroke: 1.5px; /* [drv] tick, dash                         */
+  --mob-choice-tick-w:      5px;   /* [drv] rotated 45deg, so the visible mark  */
+  --mob-choice-tick-h:      9px;   /* [drv] is ~9.9px across inside a 14px well */
+  --mob-choice-nudge:      -1px;   /* [drv] optical centring of the rotated tick*/
+  --mob-choice-dash:        8px;   /* [drv] indeterminate bar                   */
+  --mob-choice-dot:         6px;   /* [drv] radio dot                           */
+
+  /* Toggle. Knob and travel are derived from the track so the three can never
+     drift apart: change --mob-toggle-w or -h and the knob still fits, still
+     ends flush, still travels the exact gap. */
+  --mob-toggle-w:   30px; /* [drv] */
+  --mob-toggle-h:   18px; /* [drv] tall enough to leave a >=12px knob          */
+  --mob-toggle-pad: 2px;  /* [drv] */
+  --mob-toggle-knob: calc(
+    var(--mob-toggle-h) - 2 * var(--mob-border-width) - 2 * var(--mob-toggle-pad));
+  --mob-toggle-travel: calc(var(--mob-toggle-w) - var(--mob-toggle-h));
+
+  /* Segmented. Geometry is borrowed from the field/control ladder so a
+     segmented control lines up with the input and the button beside it. */
+  --mob-segmented-control-h:      var(--mob-control-h-md);
+  --mob-segmented-control-px:     var(--mob-control-px-sm);
+  --mob-segmented-control-radius: var(--mob-field-radius);
+  --mob-segmented-control-font:   var(--mob-size-sm);
+  /* The frame clips with overflow:hidden, so an outer ring would be cut in half.
+     Focus is drawn inside the segment instead — the permitted refinement of the
+     base.css ring, not a deletion of it. */
+  --mob-segmented-control-ring: inset 0 0 0 var(--mob-border-width-strong) var(--mob-focus-color);
+}
+
+/* =============================================================================
+   SHARED — the label shell and the hidden input
+   ============================================================================= */
+.mob-checkbox,
+.mob-radio,
+.mob-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mob-choice-gap);
+  min-inline-size: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.mob-checkbox__input,
+.mob-radio__input,
+.mob-toggle__input,
+.mob-segmented-control__input {
+  /* Covers the whole label so focus-scroll targets the real row, but takes no
+     clicks: the <label> toggles the input natively, which keeps nested links
+     and text selection working. */
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  margin: 0;
+  padding: 0;
+  appearance: none;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mob-checkbox__label,
+.mob-radio__label,
+.mob-toggle__label {
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-md);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-secondary);
+  min-inline-size: 0;
+  user-select: none;
+}
+
+/* =============================================================================
+   CHECKBOX + RADIO — one geometry, two marks
+   ============================================================================= */
+.mob-checkbox__box,
+.mob-radio__box {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  inline-size: var(--mob-choice-size);
+  block-size: var(--mob-choice-size);
+  background: var(--mob-field-bg);
+  border: var(--mob-border-width) solid var(--mob-field-border);
+  border-radius: var(--mob-choice-radius);
+  color: var(--mob-fg-on-accent); /* the mark inherits this */
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color     var(--mob-duration-fast) var(--mob-ease-standard),
+    box-shadow       var(--mob-duration-fast) var(--mob-ease-standard),
+    color            var(--mob-duration-fast) var(--mob-ease-standard),
+    transform        var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-radio__box { border-radius: var(--mob-radius-full); }
+
+/* Marks share one grid cell: ::before is the indeterminate dash, ::after is the
+   tick (checkbox) or the dot (radio). Both scale in from the centre — opacity
+   and transform, nothing else. */
+.mob-checkbox__box::before,
+.mob-checkbox__box::after,
+.mob-radio__box::after {
+  content: '';
+  grid-area: 1 / 1;
+  opacity: 0;
+  transition:
+    opacity   var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+.mob-checkbox__box::before {
+  inline-size: var(--mob-choice-dash);
+  block-size: var(--mob-choice-mark-stroke);
+  border-radius: var(--mob-radius-full);
+  background: currentColor;
+  transform: scaleX(.5);
+}
+
+/* Physical borders on purpose. A checkmark is a glyph, not layout: mirroring it
+   under RTL would produce a backwards tick. Same reasoning as the select chevron
+   in field.css. */
+.mob-checkbox__box::after {
+  inline-size: var(--mob-choice-tick-w);
+  block-size: var(--mob-choice-tick-h);
+  border-right: var(--mob-choice-mark-stroke) solid currentColor;
+  border-bottom: var(--mob-choice-mark-stroke) solid currentColor;
+  transform: translateY(var(--mob-choice-nudge)) rotate(45deg) scale(.6);
+}
+
+.mob-radio__box::after {
+  inline-size: var(--mob-choice-dot);
+  block-size: var(--mob-choice-dot);
+  border-radius: var(--mob-radius-full);
+  background: currentColor;
+  transform: scale(.4);
+}
+
+/* --- Checked --------------------------------------------------------------- */
+.mob-checkbox__input:checked ~ .mob-checkbox__box,
+.mob-radio__input:checked ~ .mob-radio__box {
+  background: var(--mob-accent);
+  border-color: var(--mob-accent);
+}
+.mob-checkbox__input:checked ~ .mob-checkbox__box::after {
+  opacity: 1;
+  transform: translateY(var(--mob-choice-nudge)) rotate(45deg) scale(1);
+}
+.mob-radio__input:checked ~ .mob-radio__box::after {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* --- Indeterminate ---------------------------------------------------------
+   An input can be :checked AND :indeterminate at once. This block sits after
+   the checked block so the dash wins, which is the correct reading: a parent
+   checkbox over a partial selection is not "on". */
+.mob-checkbox__input:indeterminate ~ .mob-checkbox__box {
+  background: var(--mob-accent);
+  border-color: var(--mob-accent);
+}
+.mob-checkbox__input:indeterminate ~ .mob-checkbox__box::before {
+  opacity: 1;
+  transform: scaleX(1);
+}
+.mob-checkbox__input:indeterminate ~ .mob-checkbox__box::after {
+  opacity: 0;
+  transform: translateY(var(--mob-choice-nudge)) rotate(45deg) scale(.6);
+}
+
+/* =============================================================================
+   TOGGLE
+   The knob is .mob-toggle__track::after — one element, impossible to forget in
+   the markup, and it moves on transform alone.
+   ============================================================================= */
+.mob-toggle__track {
+  flex: 0 0 auto;
+  position: relative;
+  inline-size: var(--mob-toggle-w);
+  block-size: var(--mob-toggle-h);
+  background: var(--mob-field-bg);
+  border: var(--mob-border-width) solid var(--mob-field-border);
+  border-radius: var(--mob-radius-full);
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color     var(--mob-duration-fast) var(--mob-ease-standard),
+    box-shadow       var(--mob-duration-fast) var(--mob-ease-standard),
+    transform        var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-toggle__track::after {
+  content: '';
+  position: absolute;
+  inset-block-start: var(--mob-toggle-pad);
+  inset-inline-start: var(--mob-toggle-pad);
+  inline-size: var(--mob-toggle-knob);
+  block-size: var(--mob-toggle-knob);
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-fg-dim);
+  transition:
+    transform        var(--mob-duration-normal) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast)   var(--mob-ease-standard);
+}
+
+.mob-toggle__input:checked ~ .mob-toggle__track {
+  background: var(--mob-accent);
+  border-color: var(--mob-accent);
+}
+.mob-toggle__input:checked ~ .mob-toggle__track::after {
+  background: var(--mob-fg-on-accent);
+  transform: translateX(var(--mob-toggle-travel));
+}
+/* inset-inline-start already parks the knob at the right edge under RTL, so the
+   ON position is to the LEFT. `dir` must be set on an ancestor for any of the
+   logical properties in this system to work, so an attribute selector is enough. */
+[dir='rtl'] .mob-toggle__input:checked ~ .mob-toggle__track::after {
+  transform: translateX(calc(-1 * var(--mob-toggle-travel)));
+}
+
+/* =============================================================================
+   STATES
+   Ordered by precedence; later blocks win at equal specificity. Do not reorder.
+   ============================================================================= */
+
+/* --- Hover ----------------------------------------------------------------- */
+.mob-checkbox:hover .mob-checkbox__box,
+.mob-radio:hover .mob-radio__box,
+.mob-toggle:hover .mob-toggle__track {
+  background: var(--mob-field-bg-hover);
+  border-color: var(--mob-field-border-hover);
+}
+.mob-toggle:hover .mob-toggle__track::after { background: var(--mob-fg-muted); }
+
+.mob-checkbox:hover .mob-checkbox__input:checked ~ .mob-checkbox__box,
+.mob-checkbox:hover .mob-checkbox__input:indeterminate ~ .mob-checkbox__box,
+.mob-radio:hover .mob-radio__input:checked ~ .mob-radio__box,
+.mob-toggle:hover .mob-toggle__input:checked ~ .mob-toggle__track {
+  background: var(--mob-accent-hover);
+  border-color: var(--mob-accent-hover);
+}
+.mob-toggle:hover .mob-toggle__input:checked ~ .mob-toggle__track::after {
+  background: var(--mob-fg-on-accent);
+}
+
+/* --- Pressed ---------------------------------------------------------------
+   The system's press is a scale, and it stays a scale here for consistency of
+   language — but 0.985 of a 16px box is a quarter of a pixel, so the surface
+   shift is what the user actually sees at this size. */
+.mob-checkbox:active .mob-checkbox__box,
+.mob-radio:active .mob-radio__box,
+.mob-toggle:active .mob-toggle__track {
+  transform: scale(var(--mob-press-scale));
+  background: var(--mob-bg-active);
+  border-color: var(--mob-border-strong);
+}
+.mob-checkbox:active .mob-checkbox__input:checked ~ .mob-checkbox__box,
+.mob-checkbox:active .mob-checkbox__input:indeterminate ~ .mob-checkbox__box,
+.mob-radio:active .mob-radio__input:checked ~ .mob-radio__box,
+.mob-toggle:active .mob-toggle__input:checked ~ .mob-toggle__track {
+  background: var(--mob-accent-pressed);
+  border-color: var(--mob-accent-pressed);
+}
+
+/* --- Focus-visible ---------------------------------------------------------
+   Keyboard only: a mouse click on a checkbox does not match :focus-visible, so
+   the ring appears exactly when it carries information. */
+.mob-checkbox__input:focus-visible ~ .mob-checkbox__box,
+.mob-radio__input:focus-visible ~ .mob-radio__box,
+.mob-toggle__input:focus-visible ~ .mob-toggle__track {
+  box-shadow: var(--mob-focus-ring);
+}
+
+/* --- Invalid ---------------------------------------------------------------
+   A required checkbox (terms, confirmations) that was not ticked. Set
+   aria-invalid on the input as well; the border is not a message. */
+.mob-checkbox[data-mob-invalid] .mob-checkbox__box,
+.mob-radio[data-mob-invalid] .mob-radio__box,
+.mob-toggle[data-mob-invalid] .mob-toggle__track,
+.mob-checkbox__input[aria-invalid='true'] ~ .mob-checkbox__box,
+.mob-radio__input[aria-invalid='true'] ~ .mob-radio__box,
+.mob-toggle__input[aria-invalid='true'] ~ .mob-toggle__track {
+  border-color: var(--mob-negative);
+}
+
+/* --- Disabled --------------------------------------------------------------
+   Contrast down AND affordance gone: no pointer, no hover, no press, and — the
+   part that matters — a disabled CHECKED control loses the accent. A greyed
+   surface with a live accent fill reads as an active control you cannot reach. */
+.mob-checkbox:has(:disabled),
+.mob-radio:has(:disabled),
+.mob-toggle:has(:disabled) { cursor: not-allowed; }
+
+.mob-checkbox__input:disabled ~ .mob-checkbox__box,
+.mob-radio__input:disabled ~ .mob-radio__box,
+.mob-toggle__input:disabled ~ .mob-toggle__track,
+.mob-checkbox:hover .mob-checkbox__input:disabled ~ .mob-checkbox__box,
+.mob-radio:hover .mob-radio__input:disabled ~ .mob-radio__box,
+.mob-toggle:hover .mob-toggle__input:disabled ~ .mob-toggle__track,
+.mob-checkbox:active .mob-checkbox__input:disabled ~ .mob-checkbox__box,
+.mob-radio:active .mob-radio__input:disabled ~ .mob-radio__box,
+.mob-toggle:active .mob-toggle__input:disabled ~ .mob-toggle__track {
+  background: var(--mob-bg-disabled);
+  border-color: var(--mob-border-subtle);
+  color: var(--mob-fg-disabled);
+  box-shadow: none;
+  transform: none;
+}
+.mob-toggle__input:disabled ~ .mob-toggle__track::after,
+.mob-toggle:hover .mob-toggle__input:disabled ~ .mob-toggle__track::after {
+  background: var(--mob-fg-disabled);
+}
+.mob-checkbox:has(:disabled) .mob-checkbox__label,
+.mob-radio:has(:disabled) .mob-radio__label,
+.mob-toggle:has(:disabled) .mob-toggle__label { color: var(--mob-fg-disabled); }
+
+/* --- Loading ---------------------------------------------------------------
+   A committing toggle: the choice the user just made stays on screen and
+   pulses. Nothing resizes, nothing is re-coloured, so the answer is never lost.
+   Pointer input is blocked here; block the change event in your handler too and
+   set aria-busy="true" on the input. */
+.mob-checkbox[data-mob-loading],
+.mob-radio[data-mob-loading],
+.mob-toggle[data-mob-loading] {
+  pointer-events: none;
+  cursor: progress;
+}
+.mob-checkbox[data-mob-loading] .mob-checkbox__box,
+.mob-radio[data-mob-loading] .mob-radio__box,
+.mob-toggle[data-mob-loading] .mob-toggle__track {
+  animation: mob-pulse var(--mob-duration-enter) var(--mob-ease-standard) infinite alternate;
+}
+/* --- Touch floor -----------------------------------------------------------
+   base.css raises the hit target for buttons and tabs; choice controls are not
+   in that list because their target is the whole label, whose height is content-
+   driven. On a coarse pointer, give it a floor. */
+@media (pointer: coarse) {
+  .mob-checkbox,
+  .mob-radio,
+  .mob-toggle { min-block-size: var(--mob-tap-target); }
+}
+
+/* =============================================================================
+   CHOICE ROW
+   A layout companion, not a component: put it on the SAME <label> as the
+   control. Nesting one label inside another is invalid HTML and breaks the
+   implicit input association that the whole file depends on.
+
+     <label class="mob-checkbox mob-choice-row">
+       <input class="mob-checkbox__input" type="checkbox">
+       <span class="mob-checkbox__box"></span>
+       <span class="mob-choice-row__text">
+         <span class="mob-choice-row__title">Auto-claim</span>
+         <span class="mob-choice-row__desc">Collect fees above $2.00.</span>
+       </span>
+     </label>
+   ============================================================================= */
+.mob-choice-row {
+  display: flex;
+  align-items: flex-start; /* control aligns to the first line, not to the
+                              centre of a two-line description */
+  gap: var(--mob-choice-gap);
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.mob-choice-row__text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-space-2);
+  min-inline-size: 0;
+}
+
+.mob-choice-row__title {
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-md);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-secondary);
+}
+.mob-choice-row__desc {
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-muted);
+}
+
+/* Control on the far side — the settings-row reading, where the label is the
+   subject and the control is the answer. */
+.mob-choice-row--trailing { justify-content: space-between; }
+.mob-choice-row--trailing > .mob-choice-row__text { order: -1; flex: 1 1 auto; }
+
+/* Boxed: the row itself becomes the target. This is where the "selected" state
+   in the matrix lives for a choice — the control shows the answer, the box
+   shows which row holds it. */
+.mob-choice-row--boxed {
+  padding: var(--mob-space-10) var(--mob-space-12);
+  background: var(--mob-bg-surface);
+  border: var(--mob-border-width) solid var(--mob-border-control);
+  border-radius: var(--mob-field-radius);
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color     var(--mob-duration-fast) var(--mob-ease-standard),
+    transform        var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-choice-row--boxed:hover {
+  background: var(--mob-bg-hover);
+  border-color: var(--mob-border-hover);
+}
+.mob-choice-row--boxed:active { transform: scale(var(--mob-press-scale)); }
+.mob-choice-row--boxed:has(:checked) {
+  background: var(--mob-bg-selected);
+  border-color: var(--mob-border-strong);
+}
+/* The ring stays on the control; the row only follows its colour, so a focused
+   row never shows two rings. */
+.mob-choice-row--boxed:focus-within { border-color: var(--mob-focus-color); }
+.mob-choice-row--boxed:has(:disabled),
+.mob-choice-row--boxed:has(:disabled):hover {
+  background: var(--mob-bg-disabled);
+  border-color: var(--mob-border-subtle);
+  transform: none;
+}
+
+/* =============================================================================
+   SEGMENTED CONTROL
+   The signature construction at control scale: segments are fused onto a
+   --mob-bg-frame parent and the hairlines between them are 1px GAPS, not
+   borders. overflow:hidden trims the outer corners, and every segment is
+   shrinkable (flex + min-inline-size:0) so the control can never overflow the
+   column it sits in.
+
+   The block is .mob-segmented-control. .mob-segmented is card.css's fused card
+   row — same technique, different object, and it must keep the short name (see
+   the header).
+
+     +----------------------------------+
+     | item | item | item | item        |   <- background is --mob-bg-frame
+     +----------------------------------+      showing through 1px gaps
+
+   Two markup forms, identical styling:
+     <button class="mob-segmented-control__item" role="radio" aria-checked="true">
+     <label  class="mob-segmented-control__item"><input class="mob-segmented-control__input" …>
+   ============================================================================= */
+.mob-segmented-control {
+  display: inline-flex;
+  align-items: stretch;
+  /* A segmented control is sized by its labels. Without this it stretches to
+     the full cross-axis width of any flex column or grid cell it lands in, and
+     the leftover space shows as a bare slab of --mob-bg-frame past the last
+     segment. Use --fill when it really should span the row. */
+  align-self: start;
+  gap: var(--mob-hairline);
+  max-inline-size: 100%;
+  block-size: var(--mob-segmented-control-h);
+  background: var(--mob-bg-frame);
+  border: var(--mob-border-width) solid var(--mob-border-default);
+  border-radius: var(--mob-segmented-control-radius);
+  overflow: hidden;
+  transition: border-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+/* Default segments hug their labels. --fill spreads them to equal widths, which
+   is what you want for a full-width filter bar and wrong for a 1D/1W/1M switch
+   sitting next to a heading. */
+.mob-segmented-control--fill { display: flex; inline-size: 100%; }
+.mob-segmented-control--fill .mob-segmented-control__item { flex: 1 1 0; }
+
+.mob-segmented-control__item {
+  position: relative;
+  flex: 0 1 auto;
+  min-inline-size: 0; /* shrinkable — the point of the construction */
+  display: inline-flex;
+  align-items: center;
+  /* `safe`: when a label outgrows its segment, centring would push the start of
+     the word out of the box and clip the text at BOTH ends. safe centring falls
+     back to start alignment at exactly that point, so an over-long label clips
+     from the trailing edge like every other truncated string in the system. */
+  justify-content: safe center;
+  gap: var(--mob-control-gap);
+  padding-inline: var(--mob-segmented-control-px);
+  background: var(--mob-bg-surface);
+  border: 0;
+  border-radius: 0;
+  color: var(--mob-fg-muted);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-segmented-control-font);
+  font-weight: var(--mob-weight-regular);
+  line-height: var(--mob-leading-flat);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    color            var(--mob-duration-fast) var(--mob-ease-standard),
+    box-shadow       var(--mob-duration-fast) var(--mob-ease-standard),
+    transform        var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* Optional. Bare text inside the item is an anonymous flex item and cannot take
+   text-overflow, so a label that might outgrow its segment goes in this span and
+   gets a real ellipsis. Short labels do not need it. */
+.mob-segmented-control__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mob-segmented-control__item:hover {
+  background: var(--mob-bg-hover);
+  color: var(--mob-fg-secondary);
+}
+.mob-segmented-control__item:active { transform: scale(var(--mob-press-scale)); }
+
+/* Selected. The signal is text contrast plus weight plus a surface step — not
+   an accent fill. A row of filter chips is not worth the system's scarce accent,
+   and the muted -> primary jump reads at a glance even at 11.5px. */
+.mob-segmented-control__item[aria-checked='true'],
+.mob-segmented-control__item[aria-selected='true'],
+.mob-segmented-control__item[data-mob-selected],
+.mob-segmented-control__item:has(> .mob-segmented-control__input:checked) {
+  background: var(--mob-bg-selected);
+  color: var(--mob-fg-primary);
+  font-weight: var(--mob-weight-medium);
+}
+
+.mob-segmented-control__item:focus-visible,
+.mob-segmented-control__item:has(> .mob-segmented-control__input:focus-visible) {
+  box-shadow: var(--mob-segmented-control-ring);
+  outline: none;
+}
+
+.mob-segmented-control[data-mob-invalid] { border-color: var(--mob-negative); }
+
+/* A segment awaiting the result of the switch it triggered. Geometry is
+   untouched, so nothing moves under the pointer. */
+.mob-segmented-control[data-mob-loading] { cursor: progress; }
+.mob-segmented-control[data-mob-loading] .mob-segmented-control__item {
+  pointer-events: none;
+  color: var(--mob-fg-dim);
+}
+.mob-segmented-control[data-mob-loading] .mob-segmented-control__item[aria-checked='true'],
+.mob-segmented-control[data-mob-loading] .mob-segmented-control__item[data-mob-selected],
+.mob-segmented-control[data-mob-loading] .mob-segmented-control__item:has(> .mob-segmented-control__input:checked) {
+  animation: mob-pulse var(--mob-duration-enter) var(--mob-ease-standard) infinite alternate;
+}
+
+.mob-segmented-control__item:disabled,
+.mob-segmented-control__item[aria-disabled='true'],
+.mob-segmented-control__item:has(> .mob-segmented-control__input:disabled),
+.mob-segmented-control__item:disabled:hover,
+.mob-segmented-control__item[aria-disabled='true']:hover,
+.mob-segmented-control__item:has(> .mob-segmented-control__input:disabled):hover {
+  background: var(--mob-bg-disabled);
+  color: var(--mob-fg-disabled);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* --- Sizes -----------------------------------------------------------------
+   Mirrors the field ladder exactly, so a segmented control and an input of the
+   same size step are the same height and the same radius. */
+.mob-segmented-control--sm {
+  --mob-segmented-control-h: var(--mob-control-h-sm);
+  --mob-segmented-control-radius: var(--mob-radius-sm);
+  --mob-segmented-control-font: var(--mob-size-xs);
+}
+.mob-segmented-control--md {
+  --mob-segmented-control-h: var(--mob-control-h-md);
+  --mob-segmented-control-radius: var(--mob-field-radius);
+  --mob-segmented-control-font: var(--mob-size-sm);
+}
+.mob-segmented-control--lg {
+  --mob-segmented-control-h: var(--mob-control-h-lg);
+  --mob-segmented-control-px: var(--mob-control-px-md);
+  --mob-segmented-control-radius: var(--mob-field-radius);
+  --mob-segmented-control-font: var(--mob-size-sm);
+}

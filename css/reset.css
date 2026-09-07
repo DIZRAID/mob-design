@@ -1,0 +1,43 @@
+/* =============================================================================
+   mob-design — reset
+   Opinionated only where the design system has an opinion. Everything else is
+   left to the browser on purpose.
+   ============================================================================= */
+*, *::before, *::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; tab-size: 4; }
+
+body, h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd, ol, ul {
+  margin: 0;
+}
+ol[class], ul[class] { list-style: none; padding: 0; }
+
+img, svg, video, canvas, picture { display: block; max-width: 100%; }
+img, video { height: auto; }
+
+input, button, textarea, select {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+button { background: none; border: 0; padding: 0; }
+
+table { border-collapse: collapse; border-spacing: 0; }
+
+/* Never remove focus without a replacement. The system replaces it in base.css
+   with :focus-visible; this only drops the default ring where a custom one is
+   guaranteed to follow. */
+:focus { outline: none; }
+
+[hidden] { display: none !important; }
+
+/* Motion policy is global: honour the OS setting everywhere, always. Individual
+   components do not get to opt out. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

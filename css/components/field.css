@@ -1,0 +1,796 @@
+/* =============================================================================
+   mob-design — field
+   -----------------------------------------------------------------------------
+   ONE grammar for every text-entry control. Text input, textarea, select and
+   search are not four components; they are one box with different contents.
+
+   ANATOMY
+
+     .mob-field                       owns the size tokens + the vertical stack
+     ├── .mob-field__label            persists. Always. (See "Label rule".)
+     ├── .mob-input-wrap              THE BOX: background, border, radius, ring
+     │   ├── .mob-input-wrap__icon        leading icon      (optional)
+     │   ├── .mob-input | .mob-textarea | .mob-select
+     │   ├── .mob-input-wrap__affix       trailing text     (optional)
+     │   ├── .mob-search__kbd             shortcut hint     (search only)
+     │   ├── .mob-search__count           result count      (search only)
+     │   └── .mob-input-wrap__action      trailing button   (optional)
+     └── .mob-field__footer
+         ├── .mob-field__hint  |  .mob-field__error
+         └── .mob-field__counter
+
+   TWO WAYS TO BUILD THE BOX, PIXEL-IDENTICAL
+
+     bare      <input class="mob-input">                   nothing beside the text
+     wrapped   <div class="mob-input-wrap"> … </div>       anything else
+
+   Inside a wrap the control goes transparent, borderless and unpadded, and the
+   WRAP paints the box. That is the whole point: a leading icon is a flex sibling
+   of the control, so it can never overlap the text, and nobody has to maintain a
+   padding-left that happens to equal the icon width plus the gap.
+
+   LABEL RULE
+   The label persists after input. A placeholder is not a label — it disappears
+   exactly when the user needs it (while typing, and afterwards when re-reading a
+   filled form), it is invisible to a screen reader as a name, and it destroys the
+   filled/empty distinction below. Always ship .mob-field__label with a `for`
+   pointing at the control's id, or wrap the control in the <label>. If the design
+   truly has no room for a visible label, use .mob-sr-only on it — do not delete it.
+
+   ACCESSIBILITY CONTRACT the CSS cannot enforce for you:
+     aria-invalid="true"            on the control when [data-mob-invalid] is set
+     aria-describedby="…"           pointing at __hint / __error / __counter
+     aria-busy="true"               on the control when [data-mob-loading] is set
+   The error message is the non-colour signal for the error state; red alone is
+   not a status. Do not render a red border with no text.
+
+   SIZES
+   --sm / --md / --lg drive --mob-field-h from --mob-control-h-*, the same tokens
+   the button reads. That is deliberate: a button sitting beside an input of the
+   same size step lines up to the pixel, top and bottom, at every size. If you
+   ever need a height that is not on that ladder, the ladder is wrong, not the
+   screen. L is the unsized default (--mob-field-h resolves to --mob-control-h-lg).
+
+   NOTES FOR CONSUMERS
+   - .mob-select MUST live inside .mob-input-wrap. A <select> is a replaced element
+     and cannot carry a pseudo-element, so the chevron is drawn by the wrap.
+   - The state rules below are ordered by precedence and rely on source order:
+     filled -> hover -> focus -> invalid -> loading -> readonly -> disabled.
+     Do not reorder the blocks.
+   - Motion is colour, ring and transform only. Nothing here transitions a
+     geometric property, so no field ever reflows on interaction.
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   tokens.css already owns --mob-field-bg / -border / -h / -px / -radius and
+   --mob-textarea-min-h. Everything below is new, and everything off-scale is
+   marked with its provenance.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Type. The value in a field is data, so it is mono and tabular like every
+     other number in the system. */
+  --mob-field-font:    var(--mob-size-lg);
+  --mob-field-font-sm: var(--mob-size-sm);
+  --mob-field-font-md: var(--mob-size-md);
+  --mob-field-font-lg: var(--mob-field-font);
+
+  /* Inline padding per size step. S borrows the S button's padding so the two
+     read as the same control family; M and L keep the contract's 12px. */
+  --mob-field-px-sm: var(--mob-control-px-sm);
+  --mob-field-px-md: var(--mob-field-px);
+  --mob-field-px-lg: var(--mob-field-px);
+
+  /* Radius per size step. The contract pins the field family at --mob-radius-md;
+     S steps down to --mob-radius-sm so a small input matches a small button. */
+  --mob-field-radius-sm: var(--mob-radius-sm);
+  --mob-field-radius-md: var(--mob-field-radius);
+  --mob-field-radius-lg: var(--mob-field-radius);
+
+  --mob-field-py:  10px;  /* [drv] block padding for multi-line controls only  */
+  --mob-field-gap: var(--mob-control-gap); /* icon <-> control <-> affix       */
+
+  /* Focus. A 1px ring outside a recoloured border reads as a 2px edge: obvious,
+     not neon. The full --mob-focus-ring (2px canvas + 2px accent) is too loud on
+     a stack of eight form fields — this is the permitted refinement of it. */
+  --mob-field-ring:         0 0 0 var(--mob-border-width) var(--mob-focus-color);
+  --mob-field-ring-invalid: 0 0 0 var(--mob-border-width) var(--mob-negative);
+  /* Invalid at rest doubles the border instead of only recolouring it, so the
+     error carries a weight signal and not just a hue signal. */
+  --mob-field-edge-invalid: inset 0 0 0 var(--mob-border-width) var(--mob-negative);
+
+  /* Any spread wider than the widest field. Kills Chrome's yellow autofill wash
+     without a literal colour. */
+  --mob-field-autofill-spread: 100vmax;
+
+  /* Select chevron — a rotated square with two borders. */
+  --mob-select-chevron:        5px;   /* [drv] */
+  --mob-select-chevron-stroke: 1.5px; /* [drv] */
+
+  /* Trailing spinner. */
+  --mob-spinner-size:   14px;   /* [drv] */
+  --mob-spinner-stroke: 1.5px;  /* [drv] */
+  /* ~780ms. Composed from a motion token rather than written as a literal, so a
+     global retune of the motion system carries here. --mob-duration-slow would
+     read as panic on a rotation. */
+  --mob-spinner-duration: calc(var(--mob-duration-enter) * 3);
+
+  /* Search glyph, drawn in CSS so the system ships without an icon dependency. */
+  --mob-search-glyph:        10px;  /* [drv] lens diameter        */
+  --mob-search-glyph-stroke: 1.5px; /* [drv]                      */
+  --mob-search-handle:       4px;   /* [drv]                      */
+  --mob-search-clear-bar:    9px;   /* [drv] one stroke of the ×  */
+
+  /* Key-cap. */
+  --mob-kbd-h:      16px;  /* [drv] */
+  --mob-kbd-px:     var(--mob-space-4);
+  --mob-kbd-radius: var(--mob-radius-2xs); /* a keycap is a mechanical object,
+                              not a chip — it takes the tightest radius we have */
+}
+
+/* =============================================================================
+   FIELD — the vertical stack
+   ============================================================================= */
+.mob-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-space-6);
+  min-inline-size: 0; /* so a field in a grid column can shrink, never overflow */
+}
+
+.mob-field__label {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-space-4);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+  cursor: default;
+}
+
+/* Required marker. Never the only signal — the control still needs `required`. */
+.mob-field__required {
+  color: var(--mob-negative);
+  font-size: var(--mob-size-2xs);
+  line-height: var(--mob-leading-flat);
+}
+
+.mob-field__footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--mob-space-8);
+}
+
+/* Helper text sits at --mob-fg-muted, not --mob-fg-dim. Dim is for decorative
+   metadata; helper text is read, so it gets contrast. */
+.mob-field__hint {
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-muted);
+  min-inline-size: 0;
+}
+
+.mob-field__error {
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  font-weight: var(--mob-weight-medium);
+  color: var(--mob-negative);
+  min-inline-size: 0;
+}
+
+/* Render a hint OR an error, not both stacked. */
+.mob-field__counter {
+  flex: 0 0 auto;
+  font-size: var(--mob-size-2xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.mob-field__counter[data-mob-over] { color: var(--mob-negative); }
+
+/* =============================================================================
+   THE BOX
+   .mob-input-wrap and the three bare controls are the same painted object. Every
+   state rule below therefore targets all four in one selector list.
+   ============================================================================= */
+.mob-input-wrap,
+.mob-input,
+.mob-textarea,
+.mob-select {
+  box-sizing: border-box;
+  inline-size: 100%;
+  min-inline-size: 0;
+  background: var(--mob-field-bg);
+  border: var(--mob-border-width) solid var(--mob-field-border);
+  border-radius: var(--mob-field-radius);
+  color: var(--mob-fg-primary);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-field-font);
+  font-variant-numeric: tabular-nums;
+  padding-inline: var(--mob-field-px);
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color     var(--mob-duration-fast) var(--mob-ease-standard),
+    box-shadow       var(--mob-duration-fast) var(--mob-ease-standard),
+    color            var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+.mob-input-wrap {
+  display: flex;
+  align-items: stretch; /* the control fills the box, so a click anywhere in the
+                           padding lands in the text and not beside it */
+  gap: var(--mob-field-gap);
+  min-block-size: var(--mob-field-h);
+}
+
+.mob-input,
+.mob-select {
+  block-size: var(--mob-field-h);
+  line-height: var(--mob-leading-flat);
+}
+
+.mob-textarea {
+  display: block;
+  min-block-size: var(--mob-textarea-min-h);
+  padding-block: var(--mob-field-py);
+  line-height: var(--mob-leading-normal);
+  /* Resize is a decision, not a browser default. Vertical only: horizontal
+     resize breaks the column it sits in. Use --no-resize for a fixed box. */
+  resize: vertical;
+}
+.mob-textarea--no-resize { resize: none; }
+
+/* --- The control gives up the box when a wrap is present ------------------- */
+.mob-input-wrap > .mob-input,
+.mob-input-wrap > .mob-textarea,
+.mob-input-wrap > .mob-select {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  inline-size: auto;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  padding-inline: 0;
+  transition: color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-input-wrap > .mob-input,
+.mob-input-wrap > .mob-select {
+  block-size: auto; /* stretched by the wrap; browsers centre the line for us */
+}
+
+/* --- Control chrome -------------------------------------------------------- */
+.mob-input,
+.mob-textarea,
+.mob-select {
+  appearance: none; /* also strips Safari's rounded type="search" box */
+  outline: none;
+  caret-color: var(--mob-accent-bright);
+}
+
+.mob-input::placeholder,
+.mob-textarea::placeholder {
+  color: var(--mob-fg-dim);
+  opacity: 1; /* Firefox dims placeholders again on top of the colour */
+}
+
+/* The wrap paints the focus ring. Without this the global :focus-visible
+   contract in base.css would draw a second ring around the inner control.
+   The ring is refined, not deleted — see .mob-input-wrap:focus-within below. */
+.mob-input-wrap > .mob-input:focus-visible,
+.mob-input-wrap > .mob-textarea:focus-visible,
+.mob-input-wrap > .mob-select:focus-visible {
+  box-shadow: none;
+  border-radius: 0;
+}
+/* A bare control keeps its own ring, refined to the field treatment. */
+.mob-input:focus-visible,
+.mob-textarea:focus-visible,
+.mob-select:focus-visible {
+  border-radius: var(--mob-field-radius);
+}
+
+/* Financial UI: the native number spinner is a hover-only affordance that
+   changes the value by accident and fights tabular alignment. */
+.mob-input[type='number'] { appearance: textfield; }
+.mob-input[type='number']::-webkit-outer-spin-button,
+.mob-input[type='number']::-webkit-inner-spin-button { appearance: none; margin: 0; }
+
+/* We ship .mob-search__clear; the platform's own × would be a second one. */
+.mob-input[type='search']::-webkit-search-cancel-button,
+.mob-input[type='search']::-webkit-search-decoration { appearance: none; }
+
+/* Chrome paints its own background over an autofilled field. Repaint it. */
+.mob-input:-webkit-autofill,
+.mob-input:-webkit-autofill:hover,
+.mob-input:-webkit-autofill:focus,
+.mob-textarea:-webkit-autofill,
+.mob-select:-webkit-autofill {
+  -webkit-text-fill-color: var(--mob-fg-primary);
+  -webkit-box-shadow: inset 0 0 0 var(--mob-field-autofill-spread) var(--mob-field-bg);
+  caret-color: var(--mob-accent-bright);
+}
+.mob-input-wrap > .mob-input:-webkit-autofill {
+  /* inside a wrap the wrap owns the background; do not paint a second one */
+  -webkit-box-shadow: none;
+}
+
+/* =============================================================================
+   SLOTS
+   ============================================================================= */
+.mob-input-wrap__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  inline-size: var(--mob-control-icon);
+  color: var(--mob-fg-dim);
+  pointer-events: none; /* decoration: clicks belong to the control behind it */
+  transition: color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-input-wrap__icon > svg { inline-size: 100%; block-size: auto; }
+
+/* A unit or currency mark. Not selectable — it is not part of the value. */
+.mob-input-wrap__affix {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: var(--mob-size-sm);
+  line-height: var(--mob-leading-flat);
+  color: var(--mob-fg-dim);
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* A real trailing button: clear, reveal password, paste, unit toggle. */
+.mob-input-wrap__action {
+  flex: 0 0 auto;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+  padding: 0;
+  border: 0;
+  border-radius: var(--mob-radius-2xs);
+  background: none;
+  color: var(--mob-fg-muted);
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    color            var(--mob-duration-fast) var(--mob-ease-standard),
+    opacity          var(--mob-duration-fast) var(--mob-ease-standard),
+    transform        var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-input-wrap__action:hover { background: var(--mob-bg-hover); color: var(--mob-fg-primary); }
+.mob-input-wrap__action:active { transform: scale(var(--mob-press-scale)); }
+/* It is a real button, so it keeps a real ring. Refined to the field's 1px
+   treatment rather than the 4px canvas-offset ring, which would sit inside the
+   box and shout — the same refinement .mob-input-wrap:focus-within makes. This
+   is why "One box, one edge" below is scoped to the three controls: an unscoped
+   `.mob-input-wrap > :focus` would blank this ring and leave the clear /
+   reveal-password buttons with no keyboard indicator at all. */
+.mob-input-wrap__action:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-field-ring);
+  border-radius: var(--mob-radius-2xs);
+}
+.mob-input-wrap__action:disabled {
+  cursor: default;
+  color: var(--mob-fg-disabled);
+  background: none;
+  transform: none;
+}
+
+/* --- Textarea wrap --------------------------------------------------------- */
+.mob-input-wrap--textarea { padding-block: 0; }
+.mob-input-wrap--textarea > .mob-textarea { padding-inline: 0; }
+.mob-input-wrap--textarea > .mob-input-wrap__icon {
+  place-items: start center;
+  padding-block-start: var(--mob-field-py);
+}
+.mob-input-wrap--textarea > .mob-input-wrap__action,
+.mob-input-wrap--textarea > .mob-input-wrap__affix {
+  align-self: flex-start;
+  margin-block-start: var(--mob-field-py);
+}
+
+/* =============================================================================
+   SELECT
+   Closed state is byte-for-byte the input box. The only addition is the chevron,
+   drawn by the wrap as a trailing flex item — so, like the leading icon, it can
+   never sit on top of a long option label.
+   ============================================================================= */
+.mob-input-wrap:has(> .mob-select),
+.mob-input-wrap--select { cursor: pointer; }
+
+.mob-input-wrap > .mob-select { cursor: pointer; }
+
+.mob-input-wrap:has(> .mob-select)::after,
+.mob-input-wrap--select::after {
+  content: '';
+  flex: 0 0 auto;
+  align-self: center;
+  inline-size: var(--mob-select-chevron);
+  block-size: var(--mob-select-chevron);
+  /* Physical borders on purpose: a chevron is a glyph, not layout. Mirroring it
+     under RTL would point it sideways. Same reasoning as the checkmark in
+     choice.css. */
+  border-right: var(--mob-select-chevron-stroke) solid var(--mob-fg-muted);
+  border-bottom: var(--mob-select-chevron-stroke) solid var(--mob-fg-muted);
+  transform: translateY(-25%) rotate(45deg);
+  transition: border-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-input-wrap:has(> .mob-select):hover::after,
+.mob-input-wrap:has(> .mob-select):focus-within::after,
+.mob-input-wrap--select:hover::after,
+.mob-input-wrap--select:focus-within::after {
+  border-right-color: var(--mob-fg-secondary);
+  border-bottom-color: var(--mob-fg-secondary);
+}
+
+/* An unselected select shows its placeholder option. Mark it so the text reads
+   as a prompt rather than as a value. */
+.mob-select[data-mob-placeholder] { color: var(--mob-fg-dim); }
+
+/* The native popup is drawn by the OS; these two are the only properties it
+   reliably honours, and they matter on Windows and Linux. */
+.mob-select option {
+  background: var(--mob-bg-elevated);
+  color: var(--mob-fg-primary);
+}
+
+/* =============================================================================
+   STATES
+   Ordered by precedence. Later blocks win at equal specificity — that is the
+   mechanism, not an accident. Do not reorder.
+   ============================================================================= */
+
+/* --- Filled ---------------------------------------------------------------
+   A field carrying data steps its border one rung up the ladder. A form of
+   empty fields therefore stays calm and the ones the user has answered read
+   first. :placeholder-shown is the native "empty" signal and needs a
+   placeholder attribute; [data-mob-filled] is the escape hatch for selects and
+   for controls whose value is managed by a framework.
+
+   :where() inside :has() is load-bearing. :has() takes the specificity of its
+   most specific argument, so the unwrapped form of this selector weighed one
+   class MORE than .mob-input-wrap:hover and :focus-within below — and since
+   "later wins" only applies at EQUAL specificity, a filled wrapped field kept
+   the filled border through hover and through focus while a filled bare input
+   behaved correctly. The two forms are supposed to be pixel-identical.
+   :where() carries zero specificity, so this now weighs the same as
+   .mob-input-wrap[data-mob-filled] beside it and source order decides again. */
+.mob-input:not(:placeholder-shown),
+.mob-textarea:not(:placeholder-shown),
+.mob-input-wrap:has(> :where(.mob-input, .mob-textarea):not(:placeholder-shown)),
+.mob-input-wrap[data-mob-filled],
+.mob-input[data-mob-filled],
+.mob-textarea[data-mob-filled],
+.mob-select[data-mob-filled] {
+  border-color: var(--mob-border-strong);
+}
+
+/* --- Hover ----------------------------------------------------------------- */
+.mob-input-wrap:hover,
+.mob-input:hover,
+.mob-textarea:hover,
+.mob-select:hover {
+  background: var(--mob-field-bg-hover);
+  border-color: var(--mob-field-border-hover);
+}
+
+/* --- Focus -----------------------------------------------------------------
+   :focus-within, not :focus-visible. For a text control the two are the same
+   set anyway — browsers always match :focus-visible on a caret-bearing field —
+   and :focus-within is what lets the whole container react when the focus is
+   really on the inner input. */
+.mob-input-wrap:focus-within,
+.mob-input:focus,
+.mob-textarea:focus,
+.mob-select:focus {
+  background: var(--mob-field-bg-hover);
+  border-color: var(--mob-focus-color);
+  box-shadow: var(--mob-field-ring);
+}
+.mob-input-wrap:focus-within > .mob-input-wrap__icon { color: var(--mob-fg-muted); }
+
+/* --- Invalid ---------------------------------------------------------------
+   Survives focus: an error does not stop being an error because the caret is in
+   the field. Set aria-invalid on the control as well — the ring is not a label. */
+.mob-field[data-mob-invalid] > .mob-input-wrap,
+.mob-field[data-mob-invalid] > .mob-input,
+.mob-field[data-mob-invalid] > .mob-textarea,
+.mob-field[data-mob-invalid] > .mob-select,
+.mob-input-wrap[data-mob-invalid],
+.mob-input[aria-invalid='true'],
+.mob-textarea[aria-invalid='true'],
+.mob-select[aria-invalid='true'],
+.mob-input[data-mob-invalid],
+.mob-textarea[data-mob-invalid],
+.mob-select[data-mob-invalid] {
+  border-color: var(--mob-negative);
+  box-shadow: var(--mob-field-edge-invalid);
+}
+.mob-field[data-mob-invalid] > .mob-input-wrap:focus-within,
+.mob-field[data-mob-invalid] > .mob-input:focus,
+.mob-field[data-mob-invalid] > .mob-textarea:focus,
+.mob-field[data-mob-invalid] > .mob-select:focus,
+.mob-input-wrap[data-mob-invalid]:focus-within,
+.mob-input[aria-invalid='true']:focus,
+.mob-textarea[aria-invalid='true']:focus,
+.mob-select[aria-invalid='true']:focus,
+.mob-input[data-mob-invalid]:focus,
+.mob-textarea[data-mob-invalid]:focus,
+.mob-select[data-mob-invalid]:focus {
+  border-color: var(--mob-negative);
+  box-shadow: var(--mob-field-ring-invalid);
+}
+
+/* --- Loading ---------------------------------------------------------------
+   An async check is running (uniqueness, resolution of an address, a quote).
+   The field stays readable and stays editable; only the trailing slot changes.
+   Width is reserved two ways, so the caret never jumps:
+     - if a trailing action exists, its content is swapped in place;
+     - if not, the spinner is added as the last flex item of the wrap, which
+       shortens the text run but does not resize the field. */
+.mob-input-wrap[data-mob-loading] > .mob-input-wrap__action,
+.mob-field[data-mob-loading] .mob-input-wrap__action {
+  color: transparent;
+  pointer-events: none;
+  position: relative;
+}
+.mob-input-wrap[data-mob-loading] > .mob-input-wrap__action::after,
+.mob-field[data-mob-loading] .mob-input-wrap__action::after,
+.mob-input-wrap[data-mob-loading]:not(:has(> .mob-input-wrap__action))::after,
+.mob-field[data-mob-loading] .mob-input-wrap:not(:has(> .mob-input-wrap__action))::after {
+  content: '';
+  flex: 0 0 auto;
+  align-self: center;
+  inline-size: var(--mob-spinner-size);
+  block-size: var(--mob-spinner-size);
+  border: var(--mob-spinner-stroke) solid var(--mob-border-strong);
+  /* Physical top border: this ring is rotating, so there is no reading
+     direction to respect. */
+  border-top-color: var(--mob-fg-muted);
+  border-radius: var(--mob-radius-full);
+  /* Explicit reset: on a loading <select> this ::after has just been the
+     chevron, and inheriting its rotate() would make the spin interpolate
+     through a matrix and wobble. */
+  transform: none;
+  animation: mob-spin var(--mob-spinner-duration) linear infinite;
+}
+.mob-input-wrap[data-mob-loading] > .mob-input-wrap__action::after,
+.mob-field[data-mob-loading] .mob-input-wrap__action::after {
+  position: absolute;
+}
+/* A loading select must not be opened mid-fetch — its options are the thing
+   being fetched. A loading text input stays editable. */
+.mob-input-wrap[data-mob-loading] > .mob-select,
+.mob-field[data-mob-loading] .mob-select { pointer-events: none; }
+/* --- Read-only -------------------------------------------------------------
+   Not disabled: the value is real, copyable and focusable, so it keeps full
+   text contrast. What it loses is the affordance — no hover, no editing edge.
+
+   The next two blocks spell out the three controls inside :has() instead of the
+   shorter :has(> [readonly]) / :has(> :disabled). They have to: a wrap can also
+   hold a trailing .mob-input-wrap__action, and a disabled "clear" button would
+   otherwise grey out a perfectly live field. Only the control decides. */
+.mob-input-wrap:has(> .mob-input[readonly], > .mob-textarea[readonly]),
+.mob-input[readonly],
+.mob-textarea[readonly],
+.mob-input-wrap:has(> .mob-input[readonly], > .mob-textarea[readonly]):hover,
+.mob-input[readonly]:hover,
+.mob-textarea[readonly]:hover {
+  background: var(--mob-field-bg);
+  border-color: var(--mob-border-subtle);
+  cursor: default;
+}
+.mob-input[readonly],
+.mob-textarea[readonly] { cursor: text; }
+
+/* --- Disabled --------------------------------------------------------------
+   Contrast down AND affordance gone. A disabled field must never be mistakable
+   for a quiet read-only one, so it loses the border ladder entirely and the
+   text drops to --mob-fg-disabled. */
+.mob-input-wrap:has(> .mob-input:disabled, > .mob-textarea:disabled, > .mob-select:disabled),
+.mob-input-wrap[data-mob-disabled],
+/* raises specificity past the invalid block above: a disabled field does not
+   argue with you about validation */
+.mob-field:has(.mob-input:disabled, .mob-textarea:disabled, .mob-select:disabled) .mob-input-wrap,
+.mob-input:disabled,
+.mob-textarea:disabled,
+.mob-select:disabled,
+.mob-input-wrap:has(> .mob-input:disabled, > .mob-textarea:disabled, > .mob-select:disabled):hover,
+.mob-input:disabled:hover,
+.mob-textarea:disabled:hover,
+.mob-select:disabled:hover {
+  background: var(--mob-bg-disabled);
+  border-color: var(--mob-border-subtle);
+  color: var(--mob-fg-disabled);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.mob-input:disabled,
+.mob-textarea:disabled,
+.mob-select:disabled {
+  -webkit-text-fill-color: var(--mob-fg-disabled); /* iOS ignores `color` here */
+  opacity: 1;                                      /* …and dims it again      */
+}
+.mob-input-wrap:has(> .mob-input:disabled, > .mob-textarea:disabled, > .mob-select:disabled) > .mob-input-wrap__icon,
+.mob-input-wrap:has(> .mob-input:disabled, > .mob-textarea:disabled, > .mob-select:disabled) > .mob-input-wrap__affix,
+.mob-input-wrap:has(> .mob-input:disabled, > .mob-textarea:disabled, > .mob-select:disabled)::after { color: var(--mob-fg-disabled); }
+.mob-input-wrap:has(> .mob-input:disabled, > .mob-textarea:disabled, > .mob-select:disabled)::after {
+  border-right-color: var(--mob-fg-disabled);
+  border-bottom-color: var(--mob-fg-disabled);
+}
+.mob-field:has(.mob-input:disabled, .mob-textarea:disabled, .mob-select:disabled) .mob-field__label,
+.mob-field:has(.mob-input:disabled, .mob-textarea:disabled, .mob-select:disabled) .mob-field__hint { color: var(--mob-fg-disabled); }
+
+/* --- One box, one edge -----------------------------------------------------
+   Every state block above also matches the control when it sits inside a wrap,
+   and it has to: :focus and aria-invalid live on the control, never on the div
+   around it. For colours that is harmless — the control repaints the value the
+   wrap already painted. For a ring it is not: the field would draw two edges,
+   one nested inside the other, with the icon and the affix stranded outside the
+   inner one. The wrap owns the edge; a wrapped control never draws one.
+   Selectors here mirror the state selectors above so specificity ties and
+   source order decides. Keep this block last in the section.
+
+   Scoped to the three CONTROLS, not to every child. A bare `> :focus` also
+   matches .mob-input-wrap__action — a real button — and blanked its focus ring
+   (reset.css has already removed the outline), leaving the clear and
+   reveal-password buttons with no keyboard indicator. :where() carries zero
+   specificity, so the weights below are exactly what they were. */
+.mob-input-wrap > :where(.mob-input, .mob-textarea, .mob-select):focus,
+.mob-input-wrap > :where(.mob-input, .mob-textarea, .mob-select):disabled,
+.mob-input-wrap > :where(.mob-input, .mob-textarea, .mob-select)[aria-invalid='true'],
+.mob-input-wrap > :where(.mob-input, .mob-textarea, .mob-select)[data-mob-invalid],
+.mob-input-wrap > :where(.mob-input, .mob-textarea, .mob-select)[aria-invalid='true']:focus,
+.mob-input-wrap > :where(.mob-input, .mob-textarea, .mob-select)[data-mob-invalid]:focus { box-shadow: none; }
+
+/* =============================================================================
+   SIZES
+   Each step redefines the tokens the box already reads, so one declaration
+   block moves height, padding, radius and type together and nothing can drift.
+   Apply to .mob-field (preferred) or to a standalone .mob-input-wrap.
+   ============================================================================= */
+.mob-field--sm,
+.mob-input-wrap--sm {
+  --mob-field-h: var(--mob-control-h-sm);
+  --mob-field-px: var(--mob-field-px-sm);
+  --mob-field-radius: var(--mob-field-radius-sm);
+  --mob-field-font: var(--mob-field-font-sm);
+}
+.mob-field--md,
+.mob-input-wrap--md {
+  --mob-field-h: var(--mob-control-h-md);
+  --mob-field-px: var(--mob-field-px-md);
+  --mob-field-radius: var(--mob-field-radius-md);
+  --mob-field-font: var(--mob-field-font-md);
+}
+.mob-field--lg,
+.mob-input-wrap--lg {
+  --mob-field-h: var(--mob-control-h-lg);
+  --mob-field-px: var(--mob-field-px-lg);
+  --mob-field-radius: var(--mob-field-radius-lg);
+  --mob-field-font: var(--mob-field-font-lg);
+}
+
+/* =============================================================================
+   SEARCH
+   A specialisation of the box, not a new component: same border, same height,
+   same states. It only adds four optional slots.
+
+     <div class="mob-input-wrap mob-search">
+       <span class="mob-search__icon"></span>
+       <input class="mob-input" type="search" placeholder="Search positions">
+       <span class="mob-search__count">12</span>
+       <kbd class="mob-kbd mob-search__kbd">/</kbd>
+       <button class="mob-input-wrap__action mob-search__clear"></button>
+     </div>
+
+   The kbd hint and the clear button toggle with `visibility`, never `display`:
+   both slots keep their width for the life of the field, so typing the first
+   character cannot shift the caret.
+   ============================================================================= */
+.mob-search__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  position: relative;
+  inline-size: var(--mob-control-icon);
+  color: var(--mob-fg-dim);
+  pointer-events: none;
+  transition: color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-search:focus-within .mob-search__icon { color: var(--mob-fg-muted); }
+
+/* Built-in glyph: only drawn when the span is empty, so passing a real <svg>
+   icon replaces it instead of doubling it. */
+.mob-search__icon:empty::before {
+  content: '';
+  inline-size: var(--mob-search-glyph);
+  block-size: var(--mob-search-glyph);
+  border: var(--mob-search-glyph-stroke) solid currentColor;
+  border-radius: var(--mob-radius-full);
+}
+.mob-search__icon:empty::after {
+  content: '';
+  position: absolute;
+  inline-size: var(--mob-search-glyph-stroke);
+  block-size: var(--mob-search-handle);
+  background: currentColor;
+  border-radius: var(--mob-radius-full);
+  /* Logical inset on purpose: a magnifier IS mirrored in RTL, unlike a chevron
+     or a checkmark. The handle angle has to follow — see the [dir] rule. */
+  inset-inline-end: var(--mob-space-2);
+  inset-block-end: var(--mob-space-2);
+  transform: rotate(-45deg);
+}
+[dir='rtl'] .mob-search__icon:empty::after { transform: rotate(45deg); }
+
+.mob-search__count {
+  flex: 0 0 auto;
+  align-self: center;
+  font-size: var(--mob-size-2xs);
+  line-height: var(--mob-leading-flat);
+  color: var(--mob-fg-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.mob-search__kbd { align-self: center; }
+
+/* The hint is an invitation to focus; once focused it has done its job. */
+.mob-search:focus-within .mob-search__kbd { visibility: hidden; }
+
+/* Nothing to clear until something is typed. */
+.mob-search__clear { visibility: hidden; }
+.mob-search:has(> .mob-input:not(:placeholder-shown)) .mob-search__clear { visibility: visible; }
+
+/* Built-in × glyph, same :empty contract as the search icon. */
+.mob-search__clear:empty { position: relative; }
+.mob-search__clear:empty::before,
+.mob-search__clear:empty::after {
+  content: '';
+  position: absolute;
+  inline-size: var(--mob-search-clear-bar);
+  block-size: var(--mob-search-glyph-stroke);
+  background: currentColor;
+  border-radius: var(--mob-radius-full);
+}
+.mob-search__clear:empty::before { transform: rotate(45deg); }
+.mob-search__clear:empty::after  { transform: rotate(-45deg); }
+
+/* =============================================================================
+   KBD — the key-cap used for shortcut hints
+   Standalone: legal anywhere a shortcut is named, not only inside search.
+   ============================================================================= */
+.mob-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-inline-size: var(--mob-kbd-h);
+  block-size: var(--mob-kbd-h);
+  padding-inline: var(--mob-kbd-px);
+  background: var(--mob-bg-surface-raised);
+  border: var(--mob-border-width) solid var(--mob-border-control);
+  border-radius: var(--mob-kbd-radius);
+  /* One-pixel bottom edge: the only "physicality" the system allows itself.
+     It is an inset border, not a drop shadow. */
+  box-shadow: inset 0 calc(-1 * var(--mob-border-width)) 0 var(--mob-border-frame);
+  color: var(--mob-fg-muted);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-2xs);
+  line-height: var(--mob-leading-flat);
+  white-space: nowrap;
+  user-select: none;
+}

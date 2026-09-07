@@ -1,0 +1,361 @@
+{
+  "$description": "mob-design TIER 2 — semantic. Hand-maintained mirror of the semantic block in css/tokens.css, which is the source of truth. This is the only tier a component may read (plus tier 3). Every $value is an alias into primitives.json; redefining this tier is how you retheme, and primitives stay put. The derived light mode is carried per token as $extensions['mob.theme.light'] rather than as a second file, because it is one role inversion of the same system, not a second design. $extensions['mob.provenance'] mirrors the provenance of the primitive each token aliases.",
+
+  "background": {
+    "$type": "color",
+    "$description": "Four elevation steps plus their states. A fifth background is a smell — depth in this system comes from surface plus a 1px border, never from a drop shadow.",
+    "canvas": {
+      "$value": "{color.gray.975}",
+      "$description": "The page. Near-black, not black.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-canvas", "mob.theme.light": "#f7f8fa" }
+    },
+    "sunken": {
+      "$value": "{color.gray.950}",
+      "$description": "Below the canvas: wells, inputs at rest, alt panels.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-sunken", "mob.theme.light": "#eef0f4" }
+    },
+    "surface": {
+      "$value": "{color.gray.925}",
+      "$description": "Cards, panels, and each segment of a fused card.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-surface", "mob.theme.light": "#ffffff" }
+    },
+    "surface-raised": {
+      "$value": "{color.gray.900}",
+      "$description": "One step above a surface: chips and inline marks sitting on a card.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-surface-raised", "mob.theme.light": "#f4f5f7" }
+    },
+    "tile": {
+      "$value": "{color.gray.870}",
+      "$description": "Inner tile inside a card; also the skeleton block colour.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-tile", "mob.theme.light": "#f0f1f4" }
+    },
+    "hover": {
+      "$value": "{color.gray.850}",
+      "$description": "Hover fill for a row or a ghost control. One step, not a ramp.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-hover", "mob.theme.light": "#eceef2" }
+    },
+    "active": {
+      "$value": "{color.gray.880}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-active", "mob.theme.light": "#e4e7ec" }
+    },
+    "selected": {
+      "$value": "{color.gray.880}",
+      "$description": "Identical to active in dark, deliberately tinted toward the accent in light where a neutral would disappear.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-selected", "mob.theme.light": "#e9e5ff" }
+    },
+    "frame": {
+      "$value": "{color.gray.800}",
+      "$description": "Paint this on the PARENT of a fused group, then separate its children with 1px flex/grid gaps. The gaps read as hairlines and the segments stay seamless. Not a border colour.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-frame", "mob.theme.light": "#e3e5ea" }
+    },
+    "overlay": {
+      "$value": "{color.black.64}",
+      "$description": "Backdrop behind a modal.",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-bg-overlay", "mob.theme.light": "rgba(16,17,20,.48)" }
+    },
+    "elevated": {
+      "$value": "{color.gray.900}",
+      "$description": "Floating surfaces — menu, popover, toast, modal body.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-elevated", "mob.theme.light": "#ffffff" }
+    },
+    "disabled": {
+      "$value": "{color.gray.900}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-bg-disabled", "mob.theme.light": "#f0f1f4" }
+    },
+    "scrim": {
+      "$value": "{color.black.64}",
+      "$description": "Generic dimming layer. Not overridden in light mode: a dark scrim is correct in both themes.",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-scrim" }
+    },
+    "selection": {
+      "$value": "color-mix(in srgb, var(--mob-accent) 32%, transparent)",
+      "$description": "Text selection. A computed CSS value, not expressible as a token alias — exporters that cannot evaluate color-mix() should pass the string through to CSS unchanged.",
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-selection-bg",
+        "mob.theme.light": "color-mix(in srgb, var(--mob-accent) 22%, transparent)"
+      }
+    }
+  },
+
+  "text": {
+    "$type": "color",
+    "$description": "Five readable steps plus states. Tone carries meaning here, so text colour is applied by role, never by hex.",
+    "primary": {
+      "$value": "{color.gray.100}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-primary", "mob.theme.light": "#14161a" }
+    },
+    "secondary": {
+      "$value": "{color.gray.200}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-secondary", "mob.theme.light": "#34383f" }
+    },
+    "muted-hi": {
+      "$value": "{color.gray.400}",
+      "$description": "Muted text on a RAISED surface. A chip's label needs the extra step because its background is lighter than the card's.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-muted-hi", "mob.theme.light": "#565c66" }
+    },
+    "muted": {
+      "$value": "{color.gray.440}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-muted", "mob.theme.light": "#646a74" }
+    },
+    "label": {
+      "$value": "{color.gray.500}",
+      "$description": "Uppercase micro-labels and secondary metadata.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-label", "mob.theme.light": "#767c86" }
+    },
+    "dim": {
+      "$value": "{color.gray.560}",
+      "$description": "The quietest legible step. Sub-lines under a figure, timestamps.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-dim", "mob.theme.light": "#949aa4" }
+    },
+    "disabled": {
+      "$value": "{color.gray.560}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-disabled", "mob.theme.light": "#a9aeb7" }
+    },
+    "inverse": {
+      "$value": "{color.gray.975}",
+      "$description": "Text on a light fill in a dark theme.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-inverse", "mob.theme.light": "#ffffff" }
+    },
+    "on-accent": {
+      "$value": "{color.gray.000}",
+      "$description": "Text on a filled accent. Always white in both themes — the accent is dark enough in light mode to carry it.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-on-accent", "mob.theme.light": "#ffffff" }
+    },
+    "link": {
+      "$value": "{color.violet.400}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-link", "mob.theme.light": "#6339e0" }
+    },
+    "link-hover": {
+      "$value": "{color.violet.300}",
+      "$description": "Brighter in dark, darker in light. The direction of the hover flips with the theme; the magnitude does not.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-fg-link-hover", "mob.theme.light": "#4f27c9" }
+    }
+  },
+
+  "border": {
+    "$type": "color",
+    "$description": "Five steps, each with a job. Picking the wrong one is the single most common way this system is broken: a card boundary at control weight makes every card read as a control.",
+    "subtle": {
+      "$value": "{color.gray.825}",
+      "$description": "Divider INSIDE one surface — the rule between a figure block and its footer.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-border-subtle", "mob.theme.light": "#eef0f3" }
+    },
+    "frame": {
+      "$value": "{color.gray.800}",
+      "$description": "Seam between fused segments. Usually applied as background.frame plus 1px gaps, not as a border.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-border-frame", "mob.theme.light": "#e3e5ea" }
+    },
+    "default": {
+      "$value": "{color.gray.780}",
+      "$description": "Boundary of a card or panel.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-border-default", "mob.theme.light": "#dcdfe5" }
+    },
+    "control": {
+      "$value": "{color.gray.760}",
+      "$description": "Chips, inputs, ghost controls. Lighter than a card border so a control reads as touchable against the card it sits on.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-border-control", "mob.theme.light": "#cdd1d9" }
+    },
+    "strong": {
+      "$value": "{color.gray.720}",
+      "$description": "Selected or emphasised. Also the scrollbar thumb.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-border-strong", "mob.theme.light": "#b3b9c3" }
+    },
+    "hover": {
+      "$value": "{color.gray.680}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-border-hover", "mob.theme.light": "#9aa1ac" }
+    },
+    "dashed": {
+      "$value": "{color.gray.750}",
+      "$description": "Empty-state panel. The only place a dashed border is allowed.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-border-dashed", "mob.theme.light": "#cdd1d9" }
+    }
+  },
+
+  "accent": {
+    "$type": "color",
+    "$description": "Swap these and the product is rebranded; css/brand.css derives the whole family from a single --mob-brand hex if you would rather not pick eight. Accent is scarce by policy: one primary action per view, plus state marks.",
+    "default": {
+      "$value": "{color.violet.500}",
+      "$description": "Primary action fill. Emitted as --mob-accent.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent", "mob.theme.light": "#6339e0" }
+    },
+    "hover": {
+      "$value": "{color.violet.450}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-hover", "mob.theme.light": "#7248ef" }
+    },
+    "pressed": {
+      "$value": "{color.violet.550}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-accent-pressed", "mob.theme.light": "#522ec2" }
+    },
+    "deep": {
+      "$value": "{color.violet.700}",
+      "$description": "Recessive accent: inactive members of a set whose active member is accent.bright.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-deep", "mob.theme.light": "#4a27b8" }
+    },
+    "bright": {
+      "$value": "{color.violet.300}",
+      "$description": "Accent as FOREGROUND — glyphs, the active mark in a set, the focus ring. The only accent step with enough luminance to sit on near-black as text.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-bright", "mob.theme.light": "#7c5dfa" }
+    },
+    "soft": {
+      "$value": "{color.violet.600}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-soft", "mob.theme.light": "#6d4df0" }
+    },
+    "tint": {
+      "$value": "{color.violet.950}",
+      "$description": "Accent as a FILL behind a glyph. Low enough not to compete with a real surface.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-tint", "mob.theme.light": "#f0ecff" }
+    },
+    "tint-strong": {
+      "$value": "{color.violet.900}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-tint-strong", "mob.theme.light": "#e2daff" }
+    }
+  },
+
+  "feedback": {
+    "$type": "color",
+    "$description": "Four semantics, each a triplet: base (foreground on a dark surface), raised (foreground on a raised or tinted surface), tint (fill). Positive and negative are measured; warning and info are derived on the same luminance tier so they belong to the family. In light mode the base steps darken hard — a 400-tier green is unreadable on white.",
+    "positive": {
+      "$value": "{color.green.400}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-positive", "mob.theme.light": "#067a55" }
+    },
+    "positive-raised": {
+      "$value": "{color.green.300}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-positive-raised", "mob.theme.light": "#0a9268" }
+    },
+    "positive-tint": {
+      "$value": "{color.green.950}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-positive-tint", "mob.theme.light": "#e4f7f0" }
+    },
+    "negative": {
+      "$value": "{color.red.400}",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-negative", "mob.theme.light": "#c2352f" }
+    },
+    "negative-raised": {
+      "$value": "{color.red.300}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-negative-raised", "mob.theme.light": "#d94b45" }
+    },
+    "negative-tint": {
+      "$value": "{color.red.950}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-negative-tint", "mob.theme.light": "#fdecea" }
+    },
+    "warning": {
+      "$value": "{color.amber.400}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-warning", "mob.theme.light": "#9a6400" }
+    },
+    "warning-raised": {
+      "$value": "{color.amber.300}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-warning-raised", "mob.theme.light": "#b87a05" }
+    },
+    "warning-tint": {
+      "$value": "{color.amber.950}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-warning-tint", "mob.theme.light": "#fdf3e0" }
+    },
+    "info": {
+      "$value": "{color.blue.400}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-info", "mob.theme.light": "#1256b8" }
+    },
+    "info-raised": {
+      "$value": "{color.blue.300}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-info-raised", "mob.theme.light": "#1a68d8" }
+    },
+    "info-tint": {
+      "$value": "{color.blue.950}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-info-tint", "mob.theme.light": "#e8f0fd" }
+    }
+  },
+
+  "focus": {
+    "$description": "Entirely derived: the source prototype omitted keyboard focus. This system does not — every interactive primitive ships a visible ring, and a component may refine it but may not delete it. The two-layer ring works on any surface because the inner layer is the canvas colour, so the accent never touches the control's own fill.",
+    "color": {
+      "$type": "color",
+      "$value": "{accent.bright}",
+      "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-focus-color" }
+    },
+    "ring": {
+      "$type": "shadow",
+      "$value": [
+        { "offsetX": "0", "offsetY": "0", "blur": "0", "spread": "2px", "color": "{background.canvas}" },
+        { "offsetX": "0", "offsetY": "0", "blur": "0", "spread": "4px", "color": "{focus.color}" }
+      ],
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-focus-ring",
+        "mob.cssValue": "0 0 0 2px var(--mob-bg-canvas), 0 0 0 4px var(--mob-focus-color)"
+      }
+    },
+    "ring-inset": {
+      "$type": "shadow",
+      "$value": { "inset": true, "offsetX": "0", "offsetY": "0", "blur": "0", "spread": "1px", "color": "{focus.color}" },
+      "$description": "For a control that cannot afford outer bleed — a cell in a dense grid, a segment of a fused card.",
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-focus-ring-inset",
+        "mob.cssValue": "inset 0 0 0 1px var(--mob-focus-color)"
+      }
+    }
+  },
+
+  "shadow": {
+    "$type": "shadow",
+    "$description": "Restrained by policy: no drop shadow on a card, ever. These exist only for things that genuinely float above the page — menu, popover, toast, modal. If you reach for one on a card, you wanted background.surface plus border.default.",
+    "sm": {
+      "$value": { "offsetX": "0", "offsetY": "1px", "blur": "2px", "spread": "0", "color": "{color.black.40}" },
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-shadow-sm",
+        "mob.cssValue": "0 1px 2px var(--mob-black-40)",
+        "mob.theme.light": "0 1px 2px rgba(16,17,20,.06)"
+      }
+    },
+    "md": {
+      "$value": { "offsetX": "0", "offsetY": "4px", "blur": "16px", "spread": "0", "color": "{color.black.40}" },
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-shadow-md",
+        "mob.cssValue": "0 4px 16px var(--mob-black-40)",
+        "mob.theme.light": "0 4px 16px rgba(16,17,20,.08)"
+      }
+    },
+    "lg": {
+      "$value": { "offsetX": "0", "offsetY": "16px", "blur": "48px", "spread": "0", "color": "{color.black.64}" },
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-shadow-lg",
+        "mob.cssValue": "0 16px 48px var(--mob-black-64)",
+        "mob.theme.light": "0 16px 48px rgba(16,17,20,.14)"
+      }
+    }
+  },
+
+  "glow": {
+    "$type": "shadow",
+    "$description": "The one place blur is allowed: marking the ACTIVE member of a set of otherwise identical marks. The 11px radius and 50% mix are measured off the active range bin in the handoff. A glow is a state, never decoration — two glowing things on one screen means neither is active.",
+    "accent": {
+      "$value": { "offsetX": "0", "offsetY": "0", "blur": "11px", "spread": "0", "color": "color-mix(in srgb, var(--mob-accent-bright) 50%, transparent)" },
+      "$extensions": {
+        "mob.provenance": "src",
+        "mob.cssVar": "--mob-glow-accent",
+        "mob.cssValue": "0 0 11px color-mix(in srgb, var(--mob-accent-bright) 50%, transparent)",
+        "mob.theme.light": "0 0 11px color-mix(in srgb, var(--mob-accent) 34%, transparent)"
+      }
+    },
+    "positive": {
+      "$value": { "offsetX": "0", "offsetY": "0", "blur": "11px", "spread": "0", "color": "color-mix(in srgb, var(--mob-positive) 40%, transparent)" },
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-glow-positive",
+        "mob.cssValue": "0 0 11px color-mix(in srgb, var(--mob-positive) 40%, transparent)"
+      }
+    },
+    "negative": {
+      "$value": { "offsetX": "0", "offsetY": "0", "blur": "11px", "spread": "0", "color": "color-mix(in srgb, var(--mob-negative) 40%, transparent)" },
+      "$extensions": {
+        "mob.provenance": "drv",
+        "mob.cssVar": "--mob-glow-negative",
+        "mob.cssValue": "0 0 11px color-mix(in srgb, var(--mob-negative) 40%, transparent)"
+      }
+    }
+  }
+}

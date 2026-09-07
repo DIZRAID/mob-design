@@ -1,0 +1,1242 @@
+/* =============================================================================
+   mob-design — overlay
+   Everything that floats: tooltip, popover, menu, modal, bottom sheet, drawer.
+   -----------------------------------------------------------------------------
+   BLOCKS
+
+     .mob-tooltip          supplemental text. Never interactive.
+     .mob-popover          interactive contextual panel  (__header/__body/__footer)
+     .mob-menu             row list                      (__item/__separator/…)
+     .mob-modal-backdrop   scrim + centring layer
+     .mob-modal            dialog                        (__header/__body/__footer)
+     .mob-drawer           edge-anchored side panel      (__header/__body/__footer)
+
+   ANATOMY
+
+     .mob-modal-backdrop                 fixed, scrim, scroll layer, flex
+     └── .mob-modal                      margin:auto centres it; flex column
+         ├── .mob-modal__handle          sheet only — grab bar
+         ├── .mob-modal__header          pinned   ─ 1px divider
+         │   ├── .mob-modal__title
+         │   ├── .mob-modal__desc
+         │   └── .mob-modal__dismiss     slot for a .mob-icon-btn
+         ├── .mob-modal__body            the ONLY scrolling part
+         └── .mob-modal__footer          pinned   ─ 1px divider
+             ├── .mob-modal__error       optional, sits on the inline-start
+             └── actions                 exactly ONE primary
+
+     .mob-menu                           surface AND scroll container
+     ├── .mob-menu__group-label
+     ├── .mob-menu__item                 the only interactive part
+     │   ├── .mob-menu__icon             16px leading slot
+     │   ├── .mob-menu__label            flexes, truncates
+     │   ├── .mob-menu__shortcut         trailing, mono, dim
+     │   └── .mob-menu__trailing         chevron / badge slot
+     ├── .mob-menu__separator
+     └── .mob-menu__empty | __error
+
+   -----------------------------------------------------------------------------
+   THE STATE CONTRACT
+
+   Entrance and exit are driven by ONE attribute, so any framework can own the
+   state without this file knowing about it:
+
+       data-mob-state="open"      visible          (also the default — an overlay
+       data-mob-state="closed"    hidden            with no attribute is visible,
+                                                    which is what SSR and static
+                                                    documentation pages want)
+
+   `closed` keeps the element in the DOM (visibility:hidden) so the exit
+   animation can run. Consumers that unmount instead simply never set it.
+   Do NOT combine `closed` with the global [hidden] attribute — reset.css makes
+   that display:none !important and the exit is skipped.
+
+   Side is declared the same way and only affects the direction of travel:
+
+       data-mob-side="top" | "bottom" | "start" | "end"     (default: bottom)
+
+   -----------------------------------------------------------------------------
+   WHY `translate`/`scale` AND NOT `transform`
+
+   Every entrance here animates the INDIVIDUAL transform properties. `transform`
+   is left completely untouched so a positioning engine (Floating UI writes
+   `transform: translate3d(...)`) can own it without fighting the animation.
+   Same compositor path, same motion policy — just a different property.
+
+   -----------------------------------------------------------------------------
+   WHAT THIS FILE DOES NOT DO — consumer responsibilities
+
+   1. POSITIONING. Tooltip / popover / menu are unpositioned by default. Anchor
+      them with a positioning engine, the popover API, or the CSS anchor block at
+      the bottom of this file. Only appearance and entrance live here.
+   2. OUTSIDE-CLICK AND ESCAPE. .mob-popover, .mob-menu, .mob-modal and
+      .mob-drawer MUST be dismissible by a click outside and by the Escape key.
+      Nothing in CSS can do that; it is not optional.
+   3. FOCUS. Move focus into a modal/drawer on open, trap it while open, restore
+      it to the trigger on close. Menus need roving focus (see [data-mob-active]).
+   4. BODY SCROLL LOCK while a modal, sheet or drawer is open.
+   5. ROLES. role="tooltip" / "dialog" + aria-modal / "menu"+"menuitem" or
+      "listbox"+"option". The CSS reads aria-* for state, so the roles have to be
+      right for the component to look right — that coupling is deliberate.
+
+   -----------------------------------------------------------------------------
+   HOUSE RULES OBSERVED HERE
+
+   • Elevation ladder: tooltip = shadow-sm, popover/menu = shadow-md,
+     modal/drawer = shadow-lg. Cards still get NO shadow — a floating surface is
+     the one place blur is allowed to say "this is above everything".
+   • Every floating surface is bounded by --mob-border-control, one step stronger
+     than a card's border, because it sits over a dimmed canvas.
+   • Dividers inside a floating surface use --mob-overlay-divider, not
+     --mob-border-subtle: subtle is calibrated against the card surface and
+     disappears on the elevated one.
+   • Paint-only transitions (background-color / border-color / color) are used
+     for hover, per the spec's "hover → background / border / opacity 120–180ms".
+     Geometry is never transitioned. Motion is never anything but the individual
+     transform properties and opacity.
+   • Panels (.mob-popover, .mob-menu, .mob-modal, .mob-drawer) are focus landing
+     spots, not controls: they take no focus ring, and they explicitly cancel the
+     one base.css hands every :focus-visible element — including its 8px
+     border-radius, which would otherwise deform a 12px modal. The controls
+     inside them keep every ring they have.
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   [src] = measured in the handoff · [drv] = derived by the stated rule.
+   Override any of these per instance by redeclaring the variable on the block.
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Shared ------------------------------------------------------------- */
+  --mob-overlay-gap:     var(--mob-control-gap);  /* [drv] trigger→overlay = icon→label */
+  --mob-overlay-shift:   4px;                     /* [drv] entrance travel; spec §6 "4–8px" */
+  --mob-overlay-flip:    1;                       /* writing-direction multiplier, -1 in RTL */
+  --mob-overlay-divider: var(--mob-border-frame); /* [drv] hairline that survives the elevated surface */
+
+  /* --- Tooltip ------------------------------------------------------------ */
+  --mob-tooltip-bg:     var(--mob-bg-elevated);
+  --mob-tooltip-border: var(--mob-border-control);
+  --mob-tooltip-fg:     var(--mob-fg-secondary);
+  --mob-tooltip-radius: var(--mob-radius-xs);     /* chip family — a tooltip is chip-scale */
+  --mob-tooltip-pad-y:  5px;                      /* [drv] chip 3px + one line of breathing room */
+  --mob-tooltip-pad-x:  8px;                      /* [drv] = chip pad-x [src] */
+  --mob-tooltip-size:   var(--mob-size-xs);       /* 10.5px — the meta tier */
+  /* --mob-tooltip-max-w lives in tokens.css */
+
+  /* --- Popover ------------------------------------------------------------ */
+  --mob-popover-bg:     var(--mob-bg-elevated);
+  --mob-popover-border: var(--mob-border-control);
+  --mob-popover-radius: var(--mob-radius-lg);     /* 10px — control-L / inner-tile family */
+  --mob-popover-pad-x:  12px;                     /* [drv] card 16px, tightened for a 260px panel */
+  --mob-popover-pad-y:  10px;                     /* [drv] */
+  --mob-popover-max-h:  420px;                    /* [drv] body scroll ceiling */
+  /* --mob-popover-w lives in tokens.css */
+
+  /* --- Menu --------------------------------------------------------------- */
+  --mob-menu-bg:            var(--mob-bg-elevated);
+  --mob-menu-border:        var(--mob-border-control);
+  --mob-menu-radius:        var(--mob-radius-lg);
+  --mob-menu-pad:           4px;                    /* [drv] keeps rows off the rounded corners */
+  --mob-menu-w:            auto;                    /* set to a length, or anchor-size(width) */
+  --mob-menu-min-w:        176px;                   /* [drv] */
+  --mob-menu-item-h:       var(--mob-control-h-sm); /* a menu row IS a small control */
+  --mob-menu-item-px:      8px;                     /* [drv] = chip pad-x [src] */
+  --mob-menu-item-py:      var(--mob-space-4);
+  --mob-menu-item-radius:  var(--mob-radius-xs);
+  --mob-menu-item-gap:     var(--mob-control-gap);
+  --mob-menu-indicator-w:  12px;                    /* [drv] reserved check column */
+  --mob-menu-check-w:      4px;                     /* [drv] check glyph, pre-rotation */
+  --mob-menu-check-h:      8px;                     /* [drv] */
+  --mob-menu-spinner-size: 12px;                    /* [drv] */
+  --mob-menu-spinner-stroke: 1.5px;                 /* [drv] sibling of --mob-spark-stroke [src] */
+  --mob-menu-spinner-duration: calc(var(--mob-duration-slow) * 3); /* [drv] 660ms */
+  /* --mob-menu-max-h lives in tokens.css */
+
+  /* --- Modal -------------------------------------------------------------- */
+  --mob-modal-bg:          var(--mob-bg-elevated);
+  --mob-modal-border:      var(--mob-border-control);
+  --mob-modal-radius:      var(--mob-radius-xl);   /* 12px — the card/panel radius */
+  --mob-modal-pad-x:       20px;                   /* [drv] between card 16 [src] and card-lg 24 */
+  --mob-modal-pad-y:       16px;                   /* [drv] body */
+  --mob-modal-bar-pad-y:   14px;                   /* [drv] header + footer */
+  --mob-modal-inset:       var(--mob-space-24);    /* viewport margin around the dialog */
+  --mob-modal-max-h:       calc(100dvh - var(--mob-modal-inset) * 2);
+  --mob-modal-w-sm:        400px;                  /* [drv] */
+  --mob-modal-w-lg:        720px;                  /* [drv] */
+  --mob-modal-enter-y:     8px;                    /* [drv] spec §6 "small scale/translate" */
+  --mob-modal-enter-scale: .98;                    /* [drv] under the 1.02 ceiling */
+  /* --mob-modal-w lives in tokens.css */
+
+  /* --- Bottom sheet ------------------------------------------------------- */
+  --mob-sheet-radius:      var(--mob-radius-2xl);  /* 16px, top corners only */
+  --mob-sheet-max-h:       88dvh;                  /* [drv] leaves the scrim readable above */
+  --mob-sheet-handle-w:    36px;                   /* [drv] */
+  --mob-sheet-handle-h:    4px;                    /* [drv] */
+  --mob-sheet-handle-pad:  var(--mob-space-8);
+
+  /* --- Drawer ------------------------------------------------------------- */
+  --mob-drawer-bg:     var(--mob-bg-elevated);
+  --mob-drawer-border: var(--mob-border-control);
+  --mob-drawer-w:      380px;                      /* [drv] */
+  --mob-drawer-peek:   40px;                       /* [drv] canvas left visible on narrow screens */
+  --mob-drawer-pad-x:  var(--mob-modal-pad-x);     /* aliased so a drawer bar can never drift
+                                                      1px from a modal bar */
+  --mob-drawer-pad-y:  var(--mob-modal-pad-y);
+  --mob-drawer-bar-pad-y: var(--mob-modal-bar-pad-y);
+
+  /* --- Backdrop ----------------------------------------------------------- */
+  --mob-backdrop-bg:  var(--mob-scrim);
+  --mob-backdrop-pad: var(--mob-modal-inset);
+}
+
+/* -----------------------------------------------------------------------------
+   MOTION — one contract, six blocks
+   Enter and exit differ only in duration and easing, so both are parked in two
+   variables. The rule that is in effect at the moment of the change supplies
+   them: entering reads the base rule, leaving reads the [data-mob-state='closed']
+   rule. No JS timing, no duplicated shorthand.
+   -------------------------------------------------------------------------- */
+.mob-tooltip,
+.mob-popover,
+.mob-menu,
+.mob-modal,
+.mob-drawer,
+.mob-modal-backdrop {
+  --mob-overlay-duration:  var(--mob-duration-normal);
+  --mob-overlay-ease:      var(--mob-ease-enter);
+  --mob-overlay-vis-delay: 0s;   /* entering: visibility flips immediately */
+
+  opacity: 1;
+  translate: none;
+  scale: none;
+  visibility: visible;
+  transition:
+    opacity   var(--mob-overlay-duration) var(--mob-overlay-ease),
+    translate var(--mob-overlay-duration) var(--mob-overlay-ease),
+    scale     var(--mob-overlay-duration) var(--mob-overlay-ease),
+    visibility 0s linear var(--mob-overlay-vis-delay);
+}
+
+/* A tooltip is a hint, not an event — it arrives and leaves at control speed. */
+.mob-tooltip { --mob-overlay-duration: var(--mob-duration-fast); }
+
+.mob-tooltip[data-mob-state='closed'],
+.mob-popover[data-mob-state='closed'],
+.mob-menu[data-mob-state='closed'],
+.mob-modal[data-mob-state='closed'],
+.mob-drawer[data-mob-state='closed'],
+.mob-modal-backdrop[data-mob-state='closed'] {
+  --mob-overlay-duration: var(--mob-duration-fast);
+  --mob-overlay-ease:     var(--mob-ease-exit);
+  /* visibility is held back until the motion finishes, otherwise the exit is
+     invisible. Parked in a variable like duration and ease, so every rule that
+     restates the shorthand — including the discrete-property block for native
+     <dialog>/[popover] at the bottom of this file — keeps the same hand-off
+     instead of silently dropping it. */
+  --mob-overlay-vis-delay: var(--mob-overlay-duration);
+
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  /* visibility is a discrete step with a delay, never an animated value, and it
+     costs no layout. It is the one non-transform property in these lists. */
+  transition:
+    opacity   var(--mob-overlay-duration) var(--mob-overlay-ease),
+    translate var(--mob-overlay-duration) var(--mob-overlay-ease),
+    scale     var(--mob-overlay-duration) var(--mob-overlay-ease),
+    visibility 0s linear var(--mob-overlay-vis-delay);
+}
+
+/* RTL: mirror every inline-axis entrance. Two rules, not one selector list —
+   a browser without :dir() must still get the [dir] rule. */
+[dir='rtl'] .mob-tooltip,
+[dir='rtl'] .mob-popover,
+[dir='rtl'] .mob-menu,
+[dir='rtl'] .mob-drawer { --mob-overlay-flip: -1; }
+.mob-tooltip:dir(rtl),
+.mob-popover:dir(rtl),
+.mob-menu:dir(rtl),
+.mob-drawer:dir(rtl) { --mob-overlay-flip: -1; }
+
+/* Direction of travel. The closed position sits BEHIND the trigger, so the
+   overlay appears to come out of the thing that opened it. Default = bottom. */
+.mob-tooltip,
+.mob-popover,
+.mob-menu {
+  --mob-overlay-tx: 0;
+  --mob-overlay-ty: calc(var(--mob-overlay-shift) * -1);
+}
+.mob-tooltip[data-mob-side='top'],
+.mob-popover[data-mob-side='top'],
+.mob-menu[data-mob-side='top'] {
+  --mob-overlay-tx: 0;
+  --mob-overlay-ty: var(--mob-overlay-shift);
+}
+.mob-tooltip[data-mob-side='bottom'],
+.mob-popover[data-mob-side='bottom'],
+.mob-menu[data-mob-side='bottom'] {
+  --mob-overlay-tx: 0;
+  --mob-overlay-ty: calc(var(--mob-overlay-shift) * -1);
+}
+.mob-tooltip[data-mob-side='start'],
+.mob-popover[data-mob-side='start'],
+.mob-menu[data-mob-side='start'] {
+  --mob-overlay-tx: calc(var(--mob-overlay-shift) * var(--mob-overlay-flip));
+  --mob-overlay-ty: 0;
+}
+.mob-tooltip[data-mob-side='end'],
+.mob-popover[data-mob-side='end'],
+.mob-menu[data-mob-side='end'] {
+  --mob-overlay-tx: calc(var(--mob-overlay-shift) * -1 * var(--mob-overlay-flip));
+  --mob-overlay-ty: 0;
+}
+.mob-tooltip[data-mob-state='closed'],
+.mob-popover[data-mob-state='closed'],
+.mob-menu[data-mob-state='closed'] {
+  translate: var(--mob-overlay-tx) var(--mob-overlay-ty);
+}
+
+/* Panels are focus landing spots, not controls. base.css gives every
+   :focus-visible element a ring AND an 8px border-radius; on a panel that is a
+   glowing outline plus a deformed corner. Both are restated from the panel's own
+   --mob-panel-shadow / --mob-panel-radius locals, so nothing is guessed and the
+   two values stay overridable in one place per block. */
+.mob-popover:focus,
+.mob-menu:focus,
+.mob-modal:focus,
+.mob-drawer:focus,
+.mob-popover:focus-visible,
+.mob-menu:focus-visible,
+.mob-modal:focus-visible,
+.mob-drawer:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-panel-shadow);
+  border-radius: var(--mob-panel-radius);
+}
+
+/* =============================================================================
+   TOOLTIP
+   Supplemental text only. It is pointer-events:none by rule, not by accident:
+   a tooltip must never contain a link, a button or selectable content, because
+   it cannot be reached by keyboard or touch. If the content needs to be
+   clicked, it is a .mob-popover.
+   ============================================================================= */
+.mob-tooltip {
+  position: absolute;      /* consumer supplies the coordinates */
+  z-index: var(--mob-z-tooltip);
+  max-inline-size: var(--mob-tooltip-max-w);
+  padding-block: var(--mob-tooltip-pad-y);
+  padding-inline: var(--mob-tooltip-pad-x);
+  border: var(--mob-border-width) solid var(--mob-tooltip-border);
+  border-radius: var(--mob-tooltip-radius);
+  background: var(--mob-tooltip-bg);
+  box-shadow: var(--mob-shadow-sm);
+
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-tooltip-size);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-tooltip-fg);
+  text-align: start;
+  text-wrap: pretty;
+
+  pointer-events: none;
+  user-select: none;
+}
+
+/* A keyboard shortcut or unit inside a tooltip stays quieter than the sentence. */
+.mob-tooltip__hint {
+  display: block;
+  margin-block-start: var(--mob-space-3);
+  font-size: var(--mob-size-2xs);
+  color: var(--mob-fg-dim);
+}
+
+/* No arrow, deliberately. Depth in this system comes from a surface and a 1px
+   border; an arrow would need a seam through that border and buys nothing at
+   this scale. Proximity carries the anchoring. */
+
+/* =============================================================================
+   POPOVER
+   Interactive contextual content: filters, an account menu, compact settings.
+   REQUIRES outside-click and Escape handling from the consumer — see the file
+   header. A popover that can only be closed by its own button is a bug.
+   ============================================================================= */
+.mob-popover {
+  --mob-panel-shadow: var(--mob-shadow-md);
+  --mob-panel-radius: var(--mob-popover-radius);
+
+  position: absolute;      /* consumer supplies the coordinates */
+  z-index: var(--mob-z-popover);
+  display: flex;
+  flex-direction: column;
+  inline-size: var(--mob-popover-w);
+  max-inline-size: min(var(--mob-popover-w), calc(100vw - var(--mob-gutter-mobile) * 2));
+  border: var(--mob-border-width) solid var(--mob-popover-border);
+  border-radius: var(--mob-panel-radius);
+  background: var(--mob-popover-bg);
+  box-shadow: var(--mob-panel-shadow);
+  color: var(--mob-fg-primary);
+  overflow: hidden;        /* keeps __header/__footer inside the radius */
+}
+
+.mob-popover__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mob-space-8);
+  padding-block: var(--mob-popover-pad-y);
+  padding-inline: var(--mob-popover-pad-x);
+  border-block-end: var(--mob-hairline) solid var(--mob-overlay-divider);
+}
+
+/* The uppercase micro-label opens every data block in this system; a popover
+   header is one. Values match .mob-label so the two can never drift. */
+.mob-popover__title {
+  min-inline-size: 0;
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+  text-transform: uppercase;
+}
+
+.mob-popover__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  max-block-size: var(--mob-popover-max-h);
+  padding-block: var(--mob-popover-pad-y);
+  padding-inline: var(--mob-popover-pad-x);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-size: var(--mob-size-md);
+  color: var(--mob-fg-secondary);
+}
+/* Row-list body: the panel's padding is replaced by the menu gutter, so a
+   .mob-menu--bare inside it sits exactly where a standalone menu's rows do. */
+.mob-popover__body--flush { padding: var(--mob-menu-pad); }
+
+.mob-popover__footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--mob-space-6);
+  padding-block: var(--mob-popover-pad-y);
+  padding-inline: var(--mob-popover-pad-x);
+  border-block-start: var(--mob-hairline) solid var(--mob-overlay-divider);
+}
+
+/* Error state — an inline message, never a replacement for the panel. */
+.mob-popover__error {
+  margin-inline-end: auto;
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-negative);
+}
+
+/* Loading. Geometry is untouched: the panel keeps its width and its content
+   keeps its box, so nothing reflows when the data lands. */
+.mob-popover[aria-busy='true'],
+.mob-popover[data-mob-loading] { cursor: progress; }
+.mob-popover[aria-busy='true'] .mob-popover__body,
+.mob-popover[data-mob-loading] .mob-popover__body {
+  opacity: .45;
+  pointer-events: none;
+  transition: opacity var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+/* =============================================================================
+   MENU
+   role="menu" + role="menuitem", or role="listbox" + role="option".
+
+   KEYBOARD NAVIGATION
+   Two patterns, both supported:
+
+     a) roving tabindex — focus really moves to the row; :focus-visible styles it
+     b) aria-activedescendant — focus stays on .mob-menu and the active row is
+        marked [data-mob-active]
+
+   Both indicators are identical on purpose: a keyboard user must not be able to
+   tell which pattern the consumer picked. The ring is an INSET outline rather
+   than the global offset ring, because .mob-menu clips its own overflow and an
+   outer ring would be cut in half at the first and last row.
+
+   Consumers must scroll the active row into view themselves
+   (el.scrollIntoView({block:'nearest'})); scroll-padding below keeps it off the
+   panel edge when they do.
+   ============================================================================= */
+.mob-menu {
+  --mob-panel-shadow: var(--mob-shadow-md);
+  --mob-panel-radius: var(--mob-menu-radius);
+
+  position: absolute;      /* consumer supplies the coordinates */
+  z-index: var(--mob-z-dropdown);
+  inline-size: var(--mob-menu-w);
+  min-inline-size: var(--mob-menu-min-w);
+  max-inline-size: calc(100vw - var(--mob-gutter-mobile) * 2);
+  max-block-size: var(--mob-menu-max-h);
+  padding: var(--mob-menu-pad);
+  border: var(--mob-border-width) solid var(--mob-menu-border);
+  border-radius: var(--mob-panel-radius);
+  background: var(--mob-menu-bg);
+  box-shadow: var(--mob-panel-shadow);
+
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-padding-block: var(--mob-menu-pad);
+
+  font-family: var(--mob-font-mono);
+  list-style: none;
+}
+
+/* Nested inside a .mob-popover (or any surface that already floats): drop the
+   second surface, keep the rows. */
+.mob-menu--bare {
+  --mob-panel-shadow: none;
+  --mob-panel-radius: 0;
+
+  position: static;
+  z-index: auto;
+  border: 0;
+  background: none;
+  padding: 0;
+  min-inline-size: 0;
+  max-inline-size: none;
+}
+
+/* Loading. Reserve three rows so the panel does not pop open from nothing to
+   full height when the data arrives. */
+.mob-menu[aria-busy='true'],
+.mob-menu[data-mob-loading] {
+  min-block-size: calc(var(--mob-menu-item-h) * 3 + var(--mob-menu-pad) * 2);
+  cursor: progress;
+}
+
+/* --- Group label — the .mob-label role, inlined so the element is correct
+       without the utility class. --------------------------------------------- */
+.mob-menu__group-label {
+  padding-inline: var(--mob-menu-item-px);
+  padding-block: var(--mob-space-8) var(--mob-space-4);
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+  text-transform: uppercase;
+}
+.mob-menu__group-label:first-child { padding-block-start: var(--mob-space-4); }
+
+/* --- Separator — full-bleed: it cancels the menu's own padding so the line
+       reads as a division of the panel, not of the row list. ----------------- */
+.mob-menu__separator {
+  block-size: var(--mob-hairline);
+  margin-block: var(--mob-menu-pad);
+  margin-inline: calc(var(--mob-menu-pad) * -1);
+  border: 0;
+  background: var(--mob-overlay-divider);
+}
+
+/* --- Item ---------------------------------------------------------------- */
+.mob-menu__item {
+  position: relative;      /* anchors the check glyph and the busy spinner */
+  display: flex;
+  align-items: center;
+  gap: var(--mob-menu-item-gap);
+  inline-size: 100%;
+  min-block-size: var(--mob-menu-item-h);
+  padding-block: var(--mob-menu-item-py);
+  padding-inline: var(--mob-menu-item-px);
+  border: 0;
+  border-radius: var(--mob-menu-item-radius);
+  background: none;
+
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-sm);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-secondary);
+  text-align: start;
+  text-decoration: none;
+
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    color            var(--mob-duration-fast) var(--mob-ease-standard),
+    scale            var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* Hover / roving-focus. [data-mob-active] IS the focus indicator in the
+   aria-activedescendant pattern, so it carries the ring too. */
+.mob-menu__item:where(:not([aria-disabled='true'], :disabled)):hover {
+  background: var(--mob-bg-hover);
+  color: var(--mob-fg-primary);
+}
+.mob-menu__item[data-mob-active] {
+  background: var(--mob-bg-hover);
+  color: var(--mob-fg-primary);
+  outline: var(--mob-border-width-strong) solid var(--mob-focus-color);
+  outline-offset: calc(var(--mob-border-width-strong) * -1);
+}
+.mob-menu__item:focus-visible {
+  outline: var(--mob-border-width-strong) solid var(--mob-focus-color);
+  outline-offset: calc(var(--mob-border-width-strong) * -1);
+  box-shadow: none;                                /* the global offset ring would clip */
+  border-radius: var(--mob-menu-item-radius);      /* base.css forces 8px; keep the row's 6px */
+  background: var(--mob-bg-hover);
+  color: var(--mob-fg-primary);
+}
+
+/* Pressed */
+.mob-menu__item:where(:not([aria-disabled='true'], :disabled)):active {
+  background: var(--mob-bg-active);
+  scale: var(--mob-press-scale);
+}
+
+/* Open submenu / open disclosure keeps the row lit while its child is up. */
+.mob-menu__item[aria-expanded='true'] {
+  background: var(--mob-bg-hover);
+  color: var(--mob-fg-primary);
+}
+
+/* Selected. The check is the signal; the surface is a whisper. Colour is never
+   the only indicator (spec §10). */
+.mob-menu__item[aria-selected='true'],
+.mob-menu__item[aria-checked='true'],
+.mob-menu__item[aria-current]:not([aria-current='false']) {
+  background: var(--mob-bg-selected);
+  color: var(--mob-fg-primary);
+}
+
+/* Disabled — reduced contrast AND no affordance: no surface, no pointer, no
+   hover, no press. It must not be mistakable for a quiet-but-live row. */
+.mob-menu__item[aria-disabled='true'],
+.mob-menu__item:disabled {
+  background: none;
+  color: var(--mob-fg-disabled);
+  cursor: not-allowed;
+  scale: none;
+  pointer-events: auto;    /* still hoverable, so a tooltip can explain why */
+}
+.mob-menu__item[aria-disabled='true'] .mob-menu__icon,
+.mob-menu__item:disabled .mob-menu__icon,
+.mob-menu__item[aria-disabled='true'] .mob-menu__shortcut,
+.mob-menu__item:disabled .mob-menu__shortcut {
+  color: var(--mob-fg-disabled);
+  opacity: .6;
+}
+
+/* Loading. The row's border box does not change: the trailing slot is hidden but
+   keeps its width (visibility, not display) and the spinner is absolutely placed
+   into the space it vacated, so the row cannot resize or reflow.
+
+   CAVEAT, and the one place this is not free. A row with NO trailing slot has no
+   space to borrow, so it — and only it — reserves the spinner's width in its end
+   padding. Because box-sizing is border-box and the row is inline-size:100%, the
+   row's own box still does not move. But that padding DOES feed the row's
+   max-content contribution, and a menu left at the default --mob-menu-w:auto is
+   shrink-to-fit — so if the busy row is the widest row, the panel can widen by
+   the reserved amount for the duration of the load. There is no CSS way to
+   reserve visual space without contributing intrinsic width; the alternatives
+   are the spinner sitting on the label, or every row carrying the reservation at
+   rest. Both are worse. Avoid it in markup instead: give an item that can go
+   busy a __shortcut or __trailing, or give the menu an explicit --mob-menu-w. */
+.mob-menu__item:is([aria-busy='true'], [data-mob-loading]) {
+  color: var(--mob-fg-muted);
+  cursor: progress;
+  pointer-events: none;
+}
+.mob-menu__item:is([aria-busy='true'], [data-mob-loading]):not(
+  :has(.mob-menu__shortcut, .mob-menu__trailing)
+) {
+  padding-inline-end: calc(var(--mob-menu-item-px) * 2 + var(--mob-menu-spinner-size));
+}
+.mob-menu__item:is([aria-busy='true'], [data-mob-loading]) :is(.mob-menu__shortcut, .mob-menu__trailing) {
+  visibility: hidden;
+}
+
+.mob-menu__item:is([aria-busy='true'], [data-mob-loading])::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: var(--mob-menu-item-px);
+  inset-block-start: 50%;
+  translate: 0 -50%;
+  inline-size: var(--mob-menu-spinner-size);
+  block-size: var(--mob-menu-spinner-size);
+  border: var(--mob-menu-spinner-stroke) solid color-mix(in srgb, currentColor 22%, transparent);
+  /* Physical edge on purpose: a spinner has no reading direction. */
+  border-top-color: currentColor;
+  border-radius: var(--mob-radius-full);
+  animation: mob-spin var(--mob-menu-spinner-duration) linear infinite;
+}
+/* Destructive row — "Close position", "Remove". Muted at rest, saturated only
+   on hover, exactly like the action buttons in the handoff. */
+.mob-menu__item--danger { color: var(--mob-destroy-fg); }
+.mob-menu__item--danger .mob-menu__icon { color: currentColor; }
+.mob-menu__item--danger:where(:not([aria-disabled='true'], :disabled)):hover,
+.mob-menu__item--danger:where(:not([aria-disabled='true'], :disabled))[data-mob-active],
+.mob-menu__item--danger:where(:not([aria-disabled='true'], :disabled)):focus-visible {
+  background: var(--mob-destroy-bg-hover);
+  color: var(--mob-destroy-fg-hover);
+}
+.mob-menu__item--danger:where(:not([aria-disabled='true'], :disabled)):active {
+  background: var(--mob-destroy-bg);
+}
+
+/* --- Item slots ---------------------------------------------------------- */
+.mob-menu__icon {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+  color: var(--mob-fg-muted);
+  transition: color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-menu__item:hover .mob-menu__icon,
+.mob-menu__item[data-mob-active] .mob-menu__icon,
+.mob-menu__item:focus-visible .mob-menu__icon { color: var(--mob-fg-secondary); }
+
+.mob-menu__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mob-menu__shortcut {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  padding-inline-start: var(--mob-space-12);
+  font-size: var(--mob-size-2xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--mob-fg-dim);
+  white-space: nowrap;
+}
+
+/* Chevron, badge or count. Sits after the label, before the shortcut. */
+.mob-menu__trailing {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  color: var(--mob-fg-dim);
+}
+
+/* --- Selected indicator --------------------------------------------------
+   .mob-menu--selectable reserves the column on EVERY row, so labels stay on one
+   vertical edge whether or not a row is checked. Drawn in CSS from currentColor
+   — an SVG data URI would need a literal colour, which this system does not do. */
+.mob-menu--selectable .mob-menu__item {
+  padding-inline-start: calc(
+    var(--mob-menu-item-px) + var(--mob-menu-indicator-w) + var(--mob-menu-item-gap)
+  );
+}
+.mob-menu--selectable .mob-menu__item[aria-selected='true']::before,
+.mob-menu--selectable .mob-menu__item[aria-checked='true']::before,
+.mob-menu--selectable .mob-menu__item[aria-current]:not([aria-current='false'])::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: calc(var(--mob-menu-item-px) + var(--mob-space-2));
+  inset-block-start: 50%;
+  inline-size: var(--mob-menu-check-w);
+  block-size: var(--mob-menu-check-h);
+  /* Physical edges: a checkmark must not mirror in RTL, only its column moves. */
+  border-right: var(--mob-border-width-strong) solid currentColor;
+  border-bottom: var(--mob-border-width-strong) solid currentColor;
+  translate: 0 -60%;   /* optical centre of the rotated glyph, not its box */
+  rotate: 45deg;
+  color: var(--mob-accent-bright);
+}
+
+/* --- Non-interactive rows ------------------------------------------------- */
+.mob-menu__empty,
+.mob-menu__error {
+  padding-inline: var(--mob-menu-item-px);
+  padding-block: var(--mob-space-12);
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  text-align: center;
+  text-wrap: pretty;
+}
+.mob-menu__empty { color: var(--mob-fg-dim); }
+.mob-menu__error { color: var(--mob-negative); }
+
+/* =============================================================================
+   MODAL BACKDROP
+   Scrim AND centring layer. Making one element do both jobs means the dialog
+   never needs a transform to centre itself, which leaves `translate`/`scale`
+   free for the entrance.
+
+     <div class="mob-modal-backdrop" data-mob-state="open">
+       <div class="mob-modal" role="dialog" aria-modal="true"> … </div>
+     </div>
+
+   Dismiss on backdrop click by testing e.target === e.currentTarget — a click
+   that started inside the dialog must not close it.
+
+   No backdrop-filter. Blur behind a dialog is glassmorphism and this system
+   does not ship it.
+   ============================================================================= */
+.mob-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--mob-z-modal-backdrop);
+  display: flex;
+  padding: var(--mob-backdrop-pad);
+  background: var(--mob-backdrop-bg);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* =============================================================================
+   MODAL
+   Header and footer are pinned; the body is the only thing that scrolls.
+   The footer establishes hierarchy: EXACTLY ONE primary action, on the inline
+   end, everything else secondary or ghost. Two primaries is a defect — CSS
+   cannot enforce it, review must.
+   ============================================================================= */
+.mob-modal {
+  /* Bar geometry is shared with .mob-drawer through these four locals, so a
+     modal header and a drawer header can never drift apart. */
+  --mob-panel-pad-x:     var(--mob-modal-pad-x);
+  --mob-panel-pad-y:     var(--mob-modal-pad-y);
+  --mob-panel-bar-pad-y: var(--mob-modal-bar-pad-y);
+  --mob-panel-radius:    var(--mob-modal-radius);
+  --mob-panel-shadow:    var(--mob-shadow-lg);
+
+  /* Viewport fit, used only by the native <dialog> path at the bottom of this
+     file. Kept as variables so --sheet and the mobile block can retarget them
+     without having to out-specify `dialog.mob-modal`. */
+  --mob-modal-fit-w: calc(100% - var(--mob-modal-inset) * 2);
+  --mob-modal-fit-h: var(--mob-modal-max-h);
+
+  position: relative;
+  z-index: var(--mob-z-modal);
+  display: flex;
+  flex-direction: column;
+  margin: auto;            /* centres in the backdrop WITHOUT clipping when tall */
+  inline-size: var(--mob-modal-w);
+  max-inline-size: 100%;
+  max-block-size: 100%;
+  padding: 0;              /* the bars carry the padding; also neutralises the
+                              UA's 1em on <dialog> */
+  border: var(--mob-border-width) solid var(--mob-modal-border);
+  border-radius: var(--mob-panel-radius);
+  background: var(--mob-modal-bg);
+  box-shadow: var(--mob-panel-shadow);
+  color: var(--mob-fg-primary);
+  overflow: hidden;        /* keeps the pinned bars inside the radius */
+}
+
+.mob-modal--sm { inline-size: var(--mob-modal-w-sm); }
+.mob-modal--lg { inline-size: var(--mob-modal-w-lg); }
+
+.mob-modal[data-mob-state='closed'] {
+  translate: 0 var(--mob-modal-enter-y);
+  scale: var(--mob-modal-enter-scale);
+}
+
+/* --- Header --------------------------------------------------------------
+   Explicit grid placement rather than source order, so a close button can sit
+   anywhere in the markup and still land in the corner. */
+.mob-modal__header,
+.mob-drawer__header {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--mob-space-12);
+  padding-block: var(--mob-panel-bar-pad-y);
+  padding-inline: var(--mob-panel-pad-x);
+  border-block-end: var(--mob-hairline) solid var(--mob-overlay-divider);
+}
+
+/* 16px is the floor for sans in this system — a modal title clears it. */
+.mob-modal__title,
+.mob-drawer__title {
+  grid-column: 1;
+  grid-row: 1;
+  min-inline-size: 0;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-3xl);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+
+.mob-modal__desc,
+.mob-drawer__desc {
+  grid-column: 1;
+  grid-row: 2;
+  margin-block-start: var(--mob-space-4);
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-md);
+  line-height: var(--mob-leading-normal);
+  letter-spacing: var(--mob-tracking-normal);
+  color: var(--mob-fg-muted);
+  text-wrap: pretty;
+}
+
+/* Placement slot only. Mix it onto a real control:
+   <button class="mob-icon-btn mob-modal__dismiss"> */
+.mob-modal__dismiss,
+.mob-drawer__dismiss {
+  grid-column: 2;
+  grid-row: 1;
+  align-self: start;
+  justify-self: end;
+}
+
+/* --- Body ---------------------------------------------------------------- */
+.mob-modal__body,
+.mob-drawer__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  padding-block: var(--mob-panel-pad-y);
+  padding-inline: var(--mob-panel-pad-x);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-lg);
+  line-height: var(--mob-leading-relaxed);
+  letter-spacing: var(--mob-tracking-normal);
+  color: var(--mob-fg-secondary);
+}
+/* Full-bleed body for a table, a list or media that owns its own edges. */
+.mob-modal__body--flush,
+.mob-drawer__body--flush { padding: 0; }
+
+/* --- Footer -------------------------------------------------------------- */
+.mob-modal__footer,
+.mob-drawer__footer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--mob-space-8);
+  padding-block: var(--mob-panel-bar-pad-y);
+  padding-inline: var(--mob-panel-pad-x);
+  border-block-start: var(--mob-hairline) solid var(--mob-overlay-divider);
+}
+/* Pushes the first child (a "Learn more" link, a checkbox) to the inline start
+   and leaves the actions on the end. */
+.mob-modal__footer--split > :first-child,
+.mob-drawer__footer--split > :first-child { margin-inline-end: auto; }
+
+/* Error state — lives beside the actions so the primary button never moves. */
+.mob-modal__error,
+.mob-drawer__error {
+  margin-inline-end: auto;
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-negative);
+}
+
+/* Loading — the dialog keeps every dimension it had. */
+.mob-modal[aria-busy='true'],
+.mob-modal[data-mob-loading],
+.mob-drawer[aria-busy='true'],
+.mob-drawer[data-mob-loading] { cursor: progress; }
+.mob-modal[aria-busy='true'] .mob-modal__body,
+.mob-modal[data-mob-loading] .mob-modal__body,
+.mob-drawer[aria-busy='true'] .mob-drawer__body,
+.mob-drawer[data-mob-loading] .mob-drawer__body {
+  opacity: .45;
+  pointer-events: none;
+  transition: opacity var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+/* --- Grab handle ---------------------------------------------------------
+   Rendered only in sheet mode. Ship the element unconditionally; it costs
+   nothing on desktop and gives touch drag-to-dismiss a real hit area. */
+.mob-modal__handle {
+  display: none;
+  flex: 0 0 auto;
+  inline-size: 100%;
+  padding-block: var(--mob-sheet-handle-pad);
+  border: 0;
+  background: none;
+  cursor: grab;
+  touch-action: none;
+}
+.mob-modal__handle::before {
+  content: '';
+  display: block;
+  margin-inline: auto;
+  inline-size: var(--mob-sheet-handle-w);
+  block-size: var(--mob-sheet-handle-h);
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-border-strong);
+  transition: background-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-modal__handle:hover::before { background: var(--mob-border-hover); }
+.mob-modal__handle:active { cursor: grabbing; }
+.mob-modal__handle:focus-visible {
+  box-shadow: none;
+  outline: var(--mob-border-width-strong) solid var(--mob-focus-color);
+  outline-offset: calc(var(--mob-border-width-strong) * -1);
+  border-radius: var(--mob-radius-sm);
+}
+/* A handle directly above a header would double the top padding. */
+.mob-modal__handle + .mob-modal__header { padding-block-start: 0; }
+
+/* =============================================================================
+   BOTTOM SHEET
+   .mob-modal--sheet is the behaviour; below --mob-bp-sm every modal adopts it.
+   Bottom-anchored, full width, top corners rounded, grab handle, pure slide —
+   no scale, and no fade, because the backdrop already carries the fade.
+   ============================================================================= */
+.mob-modal--sheet {
+  --mob-panel-radius: var(--mob-sheet-radius) var(--mob-sheet-radius) 0 0;
+  --mob-modal-fit-w: 100%;
+  --mob-modal-fit-h: var(--mob-sheet-max-h);
+
+  margin-block: auto 0;
+  margin-inline: 0;
+  inline-size: 100%;
+  max-inline-size: 100%;
+  max-block-size: var(--mob-sheet-max-h);
+  border-inline: 0;
+  border-block-end: 0;
+  border-start-start-radius: var(--mob-sheet-radius);
+  border-start-end-radius: var(--mob-sheet-radius);
+  border-end-start-radius: 0;
+  border-end-end-radius: 0;
+}
+/* Pure slide. No fade — the backdrop already carries that — and no scale,
+   which on a full-width surface reads as a wobble. */
+.mob-modal--sheet[data-mob-state='closed'] {
+  opacity: 1;
+  translate: 0 100%;
+  scale: none;
+}
+.mob-modal--sheet .mob-modal__handle { display: block; }
+.mob-modal--sheet .mob-modal__footer > :not(.mob-modal__error) {
+  flex: 1 1 0;
+  min-inline-size: 0;
+}
+.mob-modal-backdrop:has(> .mob-modal--sheet) { padding: 0; }
+
+/* Mirrors --mob-bp-sm (640px). A media query cannot read a custom property, so
+   the number is written out here and nowhere else in this file. */
+@media (max-width: 639px) {
+  .mob-modal-backdrop { padding: 0; }
+
+  .mob-modal {
+    --mob-panel-radius: var(--mob-sheet-radius) var(--mob-sheet-radius) 0 0;
+    --mob-modal-fit-w: 100%;
+    --mob-modal-fit-h: var(--mob-sheet-max-h);
+
+    margin-block: auto 0;
+    margin-inline: 0;
+    inline-size: 100%;
+    max-inline-size: 100%;
+    max-block-size: var(--mob-sheet-max-h);
+    border-inline: 0;
+    border-block-end: 0;
+    border-start-start-radius: var(--mob-sheet-radius);
+    border-start-end-radius: var(--mob-sheet-radius);
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+  .mob-modal--sm,
+  .mob-modal--lg { inline-size: 100%; }
+
+  .mob-modal[data-mob-state='closed'] {
+    opacity: 1;
+    translate: 0 100%;
+    scale: none;
+  }
+
+  .mob-modal__handle { display: block; }
+
+  /* One-handed reach: footer actions take the full width of the sheet. */
+  .mob-modal__footer > :not(.mob-modal__error) {
+    flex: 1 1 0;
+    min-inline-size: 0;
+  }
+}
+
+/* =============================================================================
+   DRAWER
+   Full-height side panel. Same header/body/footer grammar as the modal (the
+   rules above are shared), different entrance: a pure slide off its own edge.
+
+   Pair it with .mob-modal-backdrop for the scrim. The drawer is position:fixed,
+   so it may be a child of the backdrop or a sibling — the backdrop's flex
+   centring does not apply to it either way.
+   ============================================================================= */
+.mob-drawer {
+  --mob-panel-pad-x:     var(--mob-drawer-pad-x);
+  --mob-panel-pad-y:     var(--mob-drawer-pad-y);
+  --mob-panel-bar-pad-y: var(--mob-drawer-bar-pad-y);
+  --mob-panel-radius:    0;    /* a full-height panel has no corners to round */
+  --mob-panel-shadow:    var(--mob-shadow-lg);
+
+  position: fixed;
+  inset-block: 0;
+  z-index: var(--mob-z-modal);
+  display: flex;
+  flex-direction: column;
+  inline-size: min(var(--mob-drawer-w), calc(100% - var(--mob-drawer-peek)));
+  max-inline-size: 100%;
+  padding: 0;
+  background: var(--mob-drawer-bg);
+  box-shadow: var(--mob-panel-shadow);
+  color: var(--mob-fg-primary);
+}
+
+.mob-drawer--start {
+  inset-inline-start: 0;
+  border-inline-end: var(--mob-border-width) solid var(--mob-drawer-border);
+}
+.mob-drawer--end {
+  inset-inline-end: 0;
+  border-inline-start: var(--mob-border-width) solid var(--mob-drawer-border);
+}
+
+/* 100% of the drawer's own width, mirrored for RTL by --mob-overlay-flip. */
+.mob-drawer--start[data-mob-state='closed'] {
+  opacity: 1;
+  translate: calc(-100% * var(--mob-overlay-flip)) 0;
+}
+.mob-drawer--end[data-mob-state='closed'] {
+  opacity: 1;
+  translate: calc(100% * var(--mob-overlay-flip)) 0;
+}
+
+/* =============================================================================
+   NATIVE <dialog> AND [popover]
+   Optional. Both put the element in the top layer and toggle `display`, which a
+   plain transition cannot animate — so the same entrance is restated on the
+   discrete-property path. Everything above keeps working unchanged; this block
+   only adds a second way to drive it.
+
+     <dialog class="mob-modal"> … </dialog>            dialog.showModal()
+     <div class="mob-menu" popover> … </div>           el.showPopover()
+   ============================================================================= */
+/* `margin: auto` comes from .mob-modal above (and from the UA sheet); combined
+   with the UA's height:fit-content that is what centres a dialog, so no
+   transform is spent on positioning here either. The fit variables — not literal
+   lengths — carry the viewport clamp, so --sheet and the mobile block can
+   retarget it without out-specifying this selector. */
+dialog.mob-modal {
+  position: fixed;
+  inset: 0;
+  max-inline-size: var(--mob-modal-fit-w);
+  max-block-size: var(--mob-modal-fit-h);
+}
+dialog.mob-modal::backdrop { background: var(--mob-backdrop-bg); }
+
+@supports (transition-behavior: allow-discrete) {
+  dialog.mob-modal,
+  .mob-tooltip[popover],
+  .mob-popover[popover],
+  .mob-menu[popover],
+  .mob-modal[popover],
+  .mob-drawer[popover] {
+    /* Same list as the base rule plus the two discrete top-layer properties.
+       `visibility` is carried through so an element driven by BOTH [popover]
+       and data-mob-state still gets its exit: these selectors are (0,2,0), the
+       same as .mob-x[data-mob-state='closed'] above, and they come later, so
+       anything omitted here would be omitted for the closed state too. */
+    transition:
+      opacity   var(--mob-overlay-duration) var(--mob-overlay-ease),
+      translate var(--mob-overlay-duration) var(--mob-overlay-ease),
+      scale     var(--mob-overlay-duration) var(--mob-overlay-ease),
+      visibility 0s linear var(--mob-overlay-vis-delay),
+      display   var(--mob-overlay-duration) allow-discrete,
+      overlay   var(--mob-overlay-duration) allow-discrete;
+  }
+  dialog.mob-modal::backdrop {
+    opacity: 1;
+    transition:
+      opacity var(--mob-overlay-duration) var(--mob-overlay-ease),
+      display var(--mob-overlay-duration) allow-discrete,
+      overlay var(--mob-overlay-duration) allow-discrete;
+  }
+  dialog.mob-modal:not([open])::backdrop { opacity: 0; }
+
+  @starting-style {
+    dialog.mob-modal[open],
+    .mob-modal[popover]:popover-open {
+      opacity: 0;
+      translate: 0 var(--mob-modal-enter-y);
+      scale: var(--mob-modal-enter-scale);
+    }
+    .mob-tooltip[popover]:popover-open,
+    .mob-popover[popover]:popover-open,
+    .mob-menu[popover]:popover-open {
+      opacity: 0;
+      translate: var(--mob-overlay-tx) var(--mob-overlay-ty);
+    }
+    .mob-drawer--start[popover]:popover-open {
+      translate: calc(-100% * var(--mob-overlay-flip)) 0;
+    }
+    .mob-drawer--end[popover]:popover-open {
+      translate: calc(100% * var(--mob-overlay-flip)) 0;
+    }
+    dialog.mob-modal[open]::backdrop { opacity: 0; }
+  }
+}
+
+/* =============================================================================
+   CSS ANCHOR POSITIONING  [optional, opt-in]
+   Where it is supported, this removes the positioning JS entirely. Opt in per
+   instance — without the --anchored modifier nothing here applies:
+
+     <button style="anchor-name: --acct-btn">…</button>
+     <div class="mob-menu mob-menu--anchored" data-mob-side="bottom"
+          style="--mob-anchor: --acct-btn"> … </div>
+
+   position-area keywords are logical, so this is RTL-safe. Fallbacks flip the
+   overlay to the opposite side when it would leave the viewport, which is the
+   one behaviour a positioning library is really bought for.
+   ============================================================================= */
+@supports (anchor-name: --mob-a) {
+  .mob-tooltip--anchored,
+  .mob-popover--anchored,
+  .mob-menu--anchored {
+    position: absolute;
+    /* Consumer-supplied hook. Falls back to `auto` — the implicit anchor, which
+       is the invoker for a [popover] — so an --anchored overlay with no
+       --mob-anchor still resolves instead of dropping the declaration. */
+    position-anchor: var(--mob-anchor, auto);
+    position-try-fallbacks: flip-block, flip-inline;
+    margin: var(--mob-overlay-gap);
+  }
+  .mob-tooltip--anchored[data-mob-side='top'],
+  .mob-popover--anchored[data-mob-side='top'],
+  .mob-menu--anchored[data-mob-side='top'] { position-area: block-start; }
+
+  .mob-tooltip--anchored,
+  .mob-popover--anchored,
+  .mob-menu--anchored,
+  .mob-tooltip--anchored[data-mob-side='bottom'],
+  .mob-popover--anchored[data-mob-side='bottom'],
+  .mob-menu--anchored[data-mob-side='bottom'] { position-area: block-end; }
+
+  .mob-tooltip--anchored[data-mob-side='start'],
+  .mob-popover--anchored[data-mob-side='start'],
+  .mob-menu--anchored[data-mob-side='start'] { position-area: inline-start; }
+
+  .mob-tooltip--anchored[data-mob-side='end'],
+  .mob-popover--anchored[data-mob-side='end'],
+  .mob-menu--anchored[data-mob-side='end'] { position-area: inline-end; }
+
+  /* Match the trigger's width — the usual want for a select-style menu. */
+  .mob-menu--anchored.mob-menu--match-trigger {
+    --mob-menu-w: anchor-size(width);
+    min-inline-size: 0;
+  }
+}

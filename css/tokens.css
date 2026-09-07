@@ -1,0 +1,601 @@
+/* =============================================================================
+   mob-design — Token layer
+   -----------------------------------------------------------------------------
+   Three tiers, strictly one-directional:
+
+       primitive  ->  semantic  ->  component
+
+   Components MUST reference semantic or component tokens only. A literal hex
+   inside a component stylesheet is a bug (see docs/08-adoption.md, "Hygiene").
+
+   Provenance markers used throughout:
+       [src]   verbatim from the calibrated design handoff (Dashboard.dc.html)
+       [drv]   derived — extends the source system by a stated rule
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   TIER 1 — PRIMITIVES
+   Raw values. Never used directly by a component.
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Neutral ramp -------------------------------------------------------
+     Dark-native. The ramp is intentionally dense at the dark end — eleven steps
+     between 1000 and 680, against six across the whole light half. On a
+     near-black canvas, surface separation and hairlines live inside a ~20-unit
+     luminance band, so that is where the resolution has to be. That density is
+     the look; do not "simplify" it away.                                      */
+  --mob-gray-1000: #060708;  /* [drv] below-canvas, sunken wells             */
+  --mob-gray-975:  #0a0b0d;  /* [src] page canvas                            */
+  --mob-gray-950:  #0e0f12;  /* [src] alt / sunken panel                     */
+  --mob-gray-925:  #101114;  /* [src] card + segment surface                 */
+  --mob-gray-900:  #131417;  /* [src] chip surface                           */
+  --mob-gray-880:  #141519;  /* [src] chip surface, alt                      */
+  --mob-gray-870:  #141518;  /* [src] skeleton / inner tile                  */
+  --mob-gray-850:  #15171a;  /* [src] hover surface                          */
+  --mob-gray-825:  #17191d;  /* [src] in-card hairline                       */
+  --mob-gray-800:  #1c1e22;  /* [src] segment frame / hairline               */
+  --mob-gray-780:  #1e2024;  /* [src] card border                            */
+  --mob-gray-760:  #23262b;  /* [src] control + chip border                  */
+  --mob-gray-750:  #24262b;  /* [src] dashed empty-state border              */
+  --mob-gray-720:  #2a2d33;  /* [src] strong border                          */
+  --mob-gray-680:  #33373e;  /* [drv] strong border, hover                   */
+  --mob-gray-560:  #5d636c;  /* [src] dim text                               */
+  --mob-gray-500:  #767c86;  /* [src] label text                             */
+  --mob-gray-440:  #8f959e;  /* [src] muted text                             */
+  --mob-gray-400:  #9aa0a8;  /* [src] muted text, raised (on chips)          */
+  --mob-gray-300:  #b4bac2;  /* [drv]                                        */
+  --mob-gray-200:  #cfd3da;  /* [src] secondary text                         */
+  --mob-gray-100:  #e8eaed;  /* [src] primary text                           */
+  --mob-gray-050:  #f4f5f7;  /* [drv] light-mode canvas                      */
+  --mob-gray-000:  #ffffff;
+
+  /* --- Violet (brand) -----------------------------------------------------
+     The whole accent family sits on one hue. Bright members land on the
+     Tailwind-400/300 luminance tier: legible on near-black without glowing.  */
+  --mob-violet-950: #211a3d; /* [src] tint fill (avatar)                     */
+  --mob-violet-900: #2a1d4d; /* [src] tint fill, stronger                    */
+  --mob-violet-700: #5b3fd6; /* [src] deep accent (inactive bins)            */
+  --mob-violet-600: #6d4df0; /* [src] accent, saturated                      */
+  --mob-violet-550: #6b4ce8; /* [drv] pressed                                */
+  --mob-violet-500: #7c5dfa; /* [src] BRAND — primary action                 */
+  --mob-violet-450: #8b70ff; /* [src] brand hover                            */
+  --mob-violet-400: #a78bfa; /* [src] link                                   */
+  --mob-violet-300: #c4b5fd; /* [src] bright — active bin, glyphs, link hover*/
+
+  /* --- Status hues --------------------------------------------------------
+     The source palette is built on the 400 tier (emerald-400 #34d399,
+     red-400 #f87171, teal-400 #2dd4bf). Warning and info are derived from the
+     same tier so they belong to the family rather than shouting over it.     */
+  --mob-green-400:  #34d399; /* [src] positive                               */
+  --mob-green-300:  #6ee7b7; /* [drv] positive, raised                       */
+  --mob-green-950:  #0d2a20; /* [drv] positive tint                          */
+  --mob-red-400:    #f87171; /* [src] negative                               */
+  --mob-red-300:    #fca5a5; /* [drv] negative, raised                       */
+  --mob-red-950:    #2a1416; /* [drv] negative tint                          */
+  --mob-amber-400:  #fbbf24; /* [drv] warning                                */
+  --mob-amber-300:  #fcd34d; /* [drv]                                        */
+  --mob-amber-950:  #2b1f06; /* [drv] warning tint                           */
+  --mob-blue-400:   #60a5fa; /* [drv] info                                   */
+  --mob-blue-300:   #93c5fd; /* [drv]                                        */
+  --mob-blue-950:   #0d1c33; /* [drv] info tint                              */
+
+  /* --- Muted action tones -------------------------------------------------
+     Calibrated triplets for actions that must read as "money in" / "danger"
+     WITHOUT the row glowing. Saturation is spent on hover only.              */
+  --mob-affirm-fg:          #7fbfa2; /* [src] */
+  --mob-affirm-bg:          #111a16; /* [src] */
+  --mob-affirm-border:      #22332b; /* [src] */
+  --mob-affirm-fg-hover:    #96d4b6; /* [src] */
+  --mob-affirm-bg-hover:    #16221c; /* [src] */
+  --mob-affirm-border-hover:#2c4438; /* [src] */
+  --mob-destroy-fg:          #c08b8b; /* [src] */
+  --mob-destroy-bg:          #1a1315; /* [src] */
+  --mob-destroy-border:      #35262a; /* [src] */
+  --mob-destroy-fg-hover:    #dc9d9d; /* [src] */
+  --mob-destroy-bg-hover:    #221a1c; /* [src] */
+  --mob-destroy-border-hover:#483035; /* [src] */
+
+  /* --- Data series --------------------------------------------------------
+     A categorical ramp for charts, composition bars and entity accents. Hue-
+     spaced on one luminance tier so no series out-shouts another.
+     s1/s2/s3 are [src] (ETH / stable / in-positions); s4-s8 are [drv].       */
+  --mob-series-1: #4f7bd6;
+  --mob-series-2: #2dd4bf;
+  --mob-series-3: #6d4df0;
+  --mob-series-4: #fbbf24;
+  --mob-series-5: #f87171;
+  --mob-series-6: #34d399;
+  --mob-series-7: #f0a3d0;
+  --mob-series-8: #8f959e;
+
+  /* Matching tint / glyph pairs for avatars and inline entity marks. */
+  --mob-series-1-tint: #1b2c4a; --mob-series-1-glyph: #9db8e8; /* [src] */
+  --mob-series-2-tint: #12403c; --mob-series-2-glyph: #7fe6d5; /* [src] */
+  --mob-series-3-tint: #211a3d; --mob-series-3-glyph: #c4b5fd; /* [src] */
+  --mob-series-4-tint: #2b1f06; --mob-series-4-glyph: #fcd34d; /* [drv] */
+  --mob-series-5-tint: #2a1416; --mob-series-5-glyph: #fca5a5; /* [drv] */
+  --mob-series-6-tint: #0d2a20; --mob-series-6-glyph: #6ee7b7; /* [drv] */
+  --mob-series-7-tint: #33162a; --mob-series-7-glyph: #f5bde0; /* [drv] */
+  --mob-series-8-tint: #212429; --mob-series-8-glyph: #b4bac2; /* [drv] */
+
+  /* --- Alpha ladder -------------------------------------------------------
+     Prefer these over new opaque greys for overlays, scrims and borders that
+     must sit on an unknown surface.                                          */
+  --mob-white-04: rgba(255,255,255,.04);
+  --mob-white-06: rgba(255,255,255,.06);
+  --mob-white-08: rgba(255,255,255,.08);
+  --mob-white-12: rgba(255,255,255,.12);
+  --mob-white-16: rgba(255,255,255,.16);
+  --mob-white-24: rgba(255,255,255,.24);
+  --mob-white-40: rgba(255,255,255,.40);
+  --mob-white-64: rgba(255,255,255,.64);
+  --mob-white-80: rgba(255,255,255,.80);
+  --mob-black-24: rgba(0,0,0,.24);
+  --mob-black-40: rgba(0,0,0,.40);
+  --mob-black-64: rgba(0,0,0,.64);
+  --mob-black-80: rgba(0,0,0,.80);
+
+  /* --- Type families ------------------------------------------------------
+     The dual-family split IS the identity of this system:
+       mono  -> every number, control label, tag and piece of metadata
+       sans  -> headings and hero figures only, always 600 / -0.02em
+     Do not set body copy in mono at paragraph length; do not set a metric in
+     sans below 16px.                                                          */
+  --mob-font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace; /* [src] */
+  --mob-font-sans: -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Inter, sans-serif; /* [src] */
+
+  --mob-weight-regular: 400;
+  --mob-weight-medium:  500;
+  --mob-weight-semibold:600;
+
+  /* --- Type scale ---------------------------------------------------------
+     Every step below 16px is [src] — these are the measured values of a real
+     high-density product surface, not a rounded ideal. Steps at and above
+     28px are [drv]: they extend the same sans-600/-0.02em logic upward for
+     marketing surfaces the handoff never covered.                            */
+  --mob-size-3xs:  9.5px;
+  --mob-size-2xs:  10px;
+  --mob-size-xs:   10.5px;
+  --mob-size-sm:   11.5px;
+  --mob-size-md:   12px;
+  --mob-size-base: 12.5px;
+  --mob-size-lg:   13px;
+  --mob-size-xl:   14px;
+  --mob-size-2xl:  14.5px;
+  --mob-size-3xl:  16px;
+  --mob-size-4xl:  18px;
+  --mob-size-5xl:  22px;
+  --mob-size-6xl:  23px;
+  --mob-size-7xl:  27px;
+  --mob-size-8xl:  32px;   /* [drv] */
+  --mob-size-9xl:  40px;   /* [drv] */
+  --mob-size-10xl: 48px;   /* [drv] */
+  --mob-size-11xl: 64px;   /* [drv] */
+  --mob-size-12xl: 80px;   /* [drv] */
+
+  --mob-leading-display: 1.0;
+  --mob-leading-tight:   1.15;
+  --mob-leading-snug:    1.3;
+  --mob-leading-normal:  1.45;
+  --mob-leading-relaxed: 1.6;
+  --mob-leading-flat:    1;
+
+  --mob-tracking-label:  0.7px;   /* [src] uppercase micro-labels */
+  --mob-tracking-tight: -0.02em;  /* [src] sans headings + hero figures */
+  --mob-tracking-normal: 0;
+
+  /* --- Spacing ------------------------------------------------------------
+     Public layout scale. Component-internal padding that does not land on this
+     scale lives in tier 3 (component tokens) rather than polluting it.        */
+  --mob-space-0:   0;
+  --mob-space-2:   2px;
+  --mob-space-3:   3px;
+  --mob-space-4:   4px;
+  --mob-space-6:   6px;
+  --mob-space-8:   8px;
+  --mob-space-10:  10px;
+  --mob-space-12:  12px;
+  --mob-space-14:  14px;
+  --mob-space-16:  16px;
+  --mob-space-20:  20px;
+  --mob-space-24:  24px;
+  --mob-space-32:  32px;
+  --mob-space-40:  40px;
+  --mob-space-48:  48px;
+  --mob-space-64:  64px;
+  --mob-space-80:  80px;
+  --mob-space-96:  96px;
+  --mob-space-128: 128px;
+
+  /* --- Radius -------------------------------------------------------------
+     Keyed to control size, not to taste. The 8/9/10 triple is deliberate:
+     radius tracks control height so a S and an L button read as the same
+     family rather than as two different shapes.                              */
+  --mob-radius-2xs:  3px;   /* [src] bars, bins, sparkline caps       */
+  --mob-radius-xs:   6px;   /* [src] chips, badges                    */
+  --mob-radius-sm:   8px;   /* [src] control S                        */
+  --mob-radius-md:   9px;   /* [src] control M                        */
+  --mob-radius-lg:   10px;  /* [src] control L, inner tiles           */
+  --mob-radius-xl:   12px;  /* [src] cards, panels, modals            */
+  --mob-radius-2xl:  16px;  /* [drv] marketing surfaces               */
+  --mob-radius-3xl:  24px;  /* [drv] hero media                       */
+  --mob-radius-full: 999px;
+
+  /* --- Border widths ------------------------------------------------------ */
+  --mob-border-width:        1px;
+  --mob-border-width-strong: 2px;
+  --mob-hairline:            1px;
+
+  /* --- Motion -------------------------------------------------------------
+     Handoff rule: transform/opacity only, 100-200ms, no bounce. Easings are
+     [drv] (the prototype declares durations by prose, not curves).           */
+  --mob-duration-instant: 80ms;
+  --mob-duration-fast:    120ms;
+  --mob-duration-normal:  160ms;
+  --mob-duration-slow:    220ms;
+  --mob-duration-enter:   260ms;
+  --mob-ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --mob-ease-enter:    cubic-bezier(.16, 1, .3, 1);
+  --mob-ease-exit:     cubic-bezier(.4, 0, 1, 1);
+  --mob-press-scale:   .985;   /* [src] */
+
+  /* --- Layout ------------------------------------------------------------- */
+  --mob-container-app:     1460px; /* [src] dense product shell */
+  --mob-container-content: 1280px; /* [drv] marketing / editorial */
+  --mob-container-prose:   68ch;   /* [drv] */
+  --mob-gutter-desktop: 26px;      /* [src] */
+  --mob-gutter-tablet:  20px;      /* [drv] */
+  --mob-gutter-mobile:  16px;      /* [drv] */
+  --mob-rail-width:     288px;     /* [src] portfolio rail */
+  --mob-header-row-h:   34px;      /* [src] column header baseline */
+
+  --mob-bp-sm:  640px;
+  --mob-bp-md:  768px;
+  --mob-bp-lg:  1024px;
+  --mob-bp-xl:  1280px;
+  --mob-bp-2xl: 1536px;
+
+  /* --- Z-index ------------------------------------------------------------ */
+  --mob-z-base:           0;
+  --mob-z-raised:        10;
+  --mob-z-sticky:       100;
+  --mob-z-dropdown:     200;
+  --mob-z-popover:      300;
+  --mob-z-modal-backdrop:400;
+  --mob-z-modal:        410;
+  --mob-z-toast:        500;
+  --mob-z-tooltip:      600;
+}
+
+/* -----------------------------------------------------------------------------
+   TIER 2 — SEMANTIC
+   The only layer a component is allowed to read (plus tier 3 below).
+   Redefining this block is how you retheme; primitives stay put.
+   -------------------------------------------------------------------------- */
+:root,
+[data-mob-theme='dark'] {
+  color-scheme: dark;
+
+  /* Surfaces — four elevation steps, no more. A fifth background is a smell. */
+  --mob-bg-canvas:        var(--mob-gray-975);
+  --mob-bg-sunken:        var(--mob-gray-950);
+  --mob-bg-surface:       var(--mob-gray-925);
+  --mob-bg-surface-raised:var(--mob-gray-900);
+  --mob-bg-tile:          var(--mob-gray-870);
+  --mob-bg-hover:         var(--mob-gray-850);
+  --mob-bg-active:        var(--mob-gray-880);
+  --mob-bg-selected:      var(--mob-gray-880);
+  --mob-bg-frame:         var(--mob-gray-800);
+  --mob-bg-overlay:       var(--mob-black-64);
+  --mob-bg-elevated:      var(--mob-gray-900);
+  --mob-bg-disabled:      var(--mob-gray-900);
+
+  /* Text */
+  --mob-fg-primary:   var(--mob-gray-100);
+  --mob-fg-secondary: var(--mob-gray-200);
+  --mob-fg-muted-hi:  var(--mob-gray-400);
+  --mob-fg-muted:     var(--mob-gray-440);
+  --mob-fg-label:     var(--mob-gray-500);
+  --mob-fg-dim:       var(--mob-gray-560);
+  --mob-fg-disabled:  var(--mob-gray-560);
+  --mob-fg-inverse:   var(--mob-gray-975);
+  --mob-fg-on-accent: var(--mob-gray-000);
+  --mob-fg-link:      var(--mob-violet-400);
+  --mob-fg-link-hover:var(--mob-violet-300);
+
+  /* Borders — five steps, each with a job. See docs/01-foundations.md. */
+  --mob-border-subtle:  var(--mob-gray-825); /* divider inside one surface     */
+  --mob-border-frame:   var(--mob-gray-800); /* seam between fused segments    */
+  --mob-border-default: var(--mob-gray-780); /* boundary of a card / panel     */
+  --mob-border-control: var(--mob-gray-760); /* chips, inputs, ghost controls  */
+  --mob-border-strong:  var(--mob-gray-720); /* selected / emphasised          */
+  --mob-border-hover:   var(--mob-gray-680);
+  --mob-border-dashed:  var(--mob-gray-750);
+
+  /* Accent — swap these five and the product is rebranded. */
+  --mob-accent:         var(--mob-violet-500);
+  --mob-accent-hover:   var(--mob-violet-450);
+  --mob-accent-pressed: var(--mob-violet-550);
+  --mob-accent-deep:    var(--mob-violet-700);
+  --mob-accent-bright:  var(--mob-violet-300);
+  --mob-accent-glow:    var(--mob-violet-400);
+  --mob-accent-soft:    var(--mob-violet-600);
+  --mob-accent-tint:    var(--mob-violet-950);
+  --mob-accent-tint-strong: var(--mob-violet-900);
+
+  /* Feedback */
+  --mob-positive:        var(--mob-green-400);
+  --mob-positive-raised: var(--mob-green-300);
+  --mob-positive-tint:   var(--mob-green-950);
+  --mob-negative:        var(--mob-red-400);
+  --mob-negative-raised: var(--mob-red-300);
+  --mob-negative-tint:   var(--mob-red-950);
+  --mob-warning:         var(--mob-amber-400);
+  --mob-warning-raised:  var(--mob-amber-300);
+  --mob-warning-tint:    var(--mob-amber-950);
+  --mob-info:            var(--mob-blue-400);
+  --mob-info-raised:     var(--mob-blue-300);
+  --mob-info-tint:       var(--mob-blue-950);
+
+  /* Focus — the prototype omitted keyboard focus entirely. This system does
+     not: every interactive primitive ships a visible ring.                    */
+  --mob-focus-color: var(--mob-accent-bright);
+  --mob-focus-ring: 0 0 0 2px var(--mob-bg-canvas), 0 0 0 4px var(--mob-focus-color);
+  --mob-focus-ring-inset: inset 0 0 0 1px var(--mob-focus-color);
+
+  /* Elevation. Restrained by policy: no Material drop shadows on cards.
+     Depth comes from surface + border, not from blur.                         */
+  --mob-shadow-sm: 0 1px 2px var(--mob-black-40);
+  --mob-shadow-md: 0 4px 16px var(--mob-black-40);
+  --mob-shadow-lg: 0 16px 48px var(--mob-black-64);
+  /* [src] The source glows the active mark in violet-400 while filling it in
+     violet-300 — the glow is one step deeper than the thing it surrounds, which
+     is why it reads as light coming off the mark rather than a blurry copy of
+     it. Keep the two tokens distinct. */
+  --mob-glow-accent: 0 0 11px color-mix(in srgb, var(--mob-accent-glow) 50%, transparent);
+  --mob-glow-positive: 0 0 11px color-mix(in srgb, var(--mob-positive) 40%, transparent);
+  --mob-glow-negative: 0 0 11px color-mix(in srgb, var(--mob-negative) 40%, transparent);
+
+  --mob-scrim: var(--mob-black-64);
+  --mob-selection-bg: color-mix(in srgb, var(--mob-accent) 32%, transparent);
+}
+
+/* -----------------------------------------------------------------------------
+   LIGHT MODE  [drv]
+   The source system is dark-native. This mode is a faithful role inversion, not
+   a second design: same hierarchy, same restraint, same accent. Opt in with
+   <html data-mob-theme="light">. Ship it only if the product needs it.
+   -------------------------------------------------------------------------- */
+[data-mob-theme='light'] {
+  color-scheme: light;
+
+  --mob-bg-canvas:        #f7f8fa;
+  --mob-bg-sunken:        #eef0f4;
+  --mob-bg-surface:       #ffffff;
+  --mob-bg-surface-raised:#f4f5f7;
+  --mob-bg-tile:          #f0f1f4;
+  --mob-bg-hover:         #eceef2;
+  --mob-bg-active:        #e4e7ec;
+  --mob-bg-selected:      #e9e5ff;
+  --mob-bg-frame:         #e3e5ea;
+  --mob-bg-overlay:       rgba(16,17,20,.48);
+  --mob-bg-elevated:      #ffffff;
+  --mob-bg-disabled:      #f0f1f4;
+
+  --mob-fg-primary:   #14161a;
+  --mob-fg-secondary: #34383f;
+  --mob-fg-muted-hi:  #565c66;
+  --mob-fg-muted:     #646a74;
+  --mob-fg-label:     #767c86;
+  --mob-fg-dim:       #949aa4;
+  --mob-fg-disabled:  #a9aeb7;
+  --mob-fg-inverse:   #ffffff;
+  --mob-fg-on-accent: #ffffff;
+  --mob-fg-link:      #6339e0;
+  --mob-fg-link-hover:#4f27c9;
+
+  --mob-border-subtle:  #eef0f3;
+  --mob-border-frame:   #e3e5ea;
+  --mob-border-default: #dcdfe5;
+  --mob-border-control: #cdd1d9;
+  --mob-border-strong:  #b3b9c3;
+  --mob-border-hover:   #9aa1ac;
+  --mob-border-dashed:  #cdd1d9;
+
+  --mob-accent:         #6339e0;
+  --mob-accent-hover:   #7248ef;
+  --mob-accent-pressed: #522ec2;
+  --mob-accent-deep:    #4a27b8;
+  --mob-accent-bright:  #7c5dfa;
+  --mob-accent-glow:    #7c5dfa;
+  --mob-accent-soft:    #6d4df0;
+  --mob-accent-tint:    #f0ecff;
+  --mob-accent-tint-strong: #e2daff;
+
+  --mob-positive:        #067a55;
+  --mob-positive-raised: #0a9268;
+  --mob-positive-tint:   #e4f7f0;
+  --mob-negative:        #c2352f;
+  --mob-negative-raised: #d94b45;
+  --mob-negative-tint:   #fdecea;
+  --mob-warning:         #9a6400;
+  --mob-warning-raised:  #b87a05;
+  --mob-warning-tint:    #fdf3e0;
+  --mob-info:            #1256b8;
+  --mob-info-raised:     #1a68d8;
+  --mob-info-tint:       #e8f0fd;
+
+  --mob-affirm-fg:          #14664a;
+  --mob-affirm-bg:          #edf8f3;
+  --mob-affirm-border:      #c2e3d4;
+  --mob-affirm-fg-hover:    #0d5039;
+  --mob-affirm-bg-hover:    #e0f2ea;
+  --mob-affirm-border-hover:#a5d5c0;
+  --mob-destroy-fg:          #9c3b38;
+  --mob-destroy-bg:          #fdf0ef;
+  --mob-destroy-border:      #f0cfcd;
+  --mob-destroy-fg-hover:    #7f2b28;
+  --mob-destroy-bg-hover:    #fbe5e3;
+  --mob-destroy-border-hover:#e6b8b5;
+
+  --mob-shadow-sm: 0 1px 2px rgba(16,17,20,.06);
+  --mob-shadow-md: 0 4px 16px rgba(16,17,20,.08);
+  --mob-shadow-lg: 0 16px 48px rgba(16,17,20,.14);
+  --mob-glow-accent: 0 0 11px color-mix(in srgb, var(--mob-accent) 34%, transparent);
+
+  --mob-series-1-tint: #dfe9fb; --mob-series-1-glyph: #24549f;
+  --mob-series-2-tint: #d5f4ef; --mob-series-2-glyph: #0d6a5e;
+  --mob-series-3-tint: #e5dffb; --mob-series-3-glyph: #4a27b8;
+  --mob-series-4-tint: #fbeed0; --mob-series-4-glyph: #8a5a00;
+  --mob-series-5-tint: #fbdedd; --mob-series-5-glyph: #a83430;
+  --mob-series-6-tint: #d6f2e6; --mob-series-6-glyph: #0a6a4b;
+  --mob-series-7-tint: #fbe0f0; --mob-series-7-glyph: #a3357a;
+  --mob-series-8-tint: #e8eaee; --mob-series-8-glyph: #4d535c;
+
+  --mob-selection-bg: color-mix(in srgb, var(--mob-accent) 22%, transparent);
+}
+
+/* Dark is the default, deliberately — it is the mode the source system was
+   calibrated in. There is no automatic OS switch, because silently shipping the
+   derived light mode would hand users an uncalibrated product. To follow the OS,
+   opt in explicitly at the app root:
+
+     const m = matchMedia('(prefers-color-scheme: light)');
+     const set = () => document.documentElement.dataset.mobTheme = m.matches ? 'light' : 'dark';
+     set(); m.addEventListener('change', set);
+*/
+
+/* -----------------------------------------------------------------------------
+   TIER 3 — COMPONENT TOKENS
+   Where the calibrated, off-scale values live. A card's 15px/16px padding is not
+   a failure of the spacing scale — it is a measured value from a real dense
+   surface. Parking it here keeps the public scale clean AND keeps repetition
+   exact: every card in the product reads the same token, so two cards can never
+   drift 1px apart.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Control geometry — height, padding and radius move together per size step.
+     Heights are the touch/target contract; do not set an ad-hoc height on a
+     button, change its size step.                                             */
+  --mob-control-h-sm: 30px;
+  --mob-control-h-md: 34px;
+  --mob-control-h-lg: 40px;
+  --mob-control-px-sm: 10px;
+  --mob-control-px-md: 15px;  /* [src] primary button */
+  --mob-control-px-lg: 18px;
+  --mob-control-gap:    6px;  /* [src] icon-to-label, action stack */
+  --mob-control-icon:    16px;  /* inside a control                         */
+  --mob-control-icon-lg: 20px;  /* inside a large control                   */
+  --mob-control-icon-xl: 24px;  /* standalone, not paired with a label      */
+  --mob-tap-target:    44px;  /* mobile minimum, enforced by base.css */
+
+  /* Card */
+  --mob-card-bg:      var(--mob-bg-surface);
+  --mob-card-border:  var(--mob-border-default);
+  --mob-card-radius:  var(--mob-radius-xl);
+  --mob-card-pad-y:      15px; /* [src] */
+  --mob-card-pad-x:      16px; /* [src] */
+  --mob-card-pad-y-sm:   12px; /* [src] mini stat card */
+  --mob-card-pad-x-sm:   13px; /* [src] */
+  --mob-card-pad-y-lg:   20px;
+  --mob-card-pad-x-lg:   24px;
+  --mob-card-gap:        14px; /* [src] rail stack */
+
+  /* Chip */
+  --mob-chip-bg:     var(--mob-bg-surface-raised);
+  --mob-chip-border: var(--mob-border-control);
+  --mob-chip-fg:     var(--mob-fg-muted-hi);
+  --mob-chip-pad-y:  3px;  /* [src] */
+  --mob-chip-pad-x:  8px;  /* [src] */
+  --mob-chip-radius: var(--mob-radius-xs);
+
+  /* Field */
+  --mob-field-bg:        var(--mob-bg-sunken);
+  --mob-field-bg-hover:  var(--mob-bg-surface);
+  --mob-field-border:    var(--mob-border-control);
+  --mob-field-border-hover: var(--mob-border-strong);
+  --mob-field-h:         var(--mob-control-h-lg);
+  --mob-field-px:        12px;
+  --mob-field-radius:    var(--mob-radius-md);
+  --mob-textarea-min-h:  108px;
+
+  /* Avatar / entity glyph */
+  --mob-avatar-sm: 20px;
+  --mob-avatar-md: 24px;  /* [src] list row */
+  --mob-avatar-lg: 28px;  /* [src] pair mark */
+  --mob-avatar-overlap: -9px; /* [src] */
+
+  /* Data marks */
+  --mob-bar-h:        5px;  /* [src] composition bar */
+  --mob-bar-gap:      2px;  /* [src] */
+  --mob-bar-radius:   var(--mob-radius-2xs);
+  --mob-meter-h:     22px;  /* [src] bin row */
+  --mob-meter-bin-h: 15px;  /* [src] inactive bin */
+  --mob-meter-gap:    3px;  /* [src] */
+  --mob-spark-h:     46px;  /* [src] */
+  --mob-spark-stroke:1.6px; /* [src] */
+  --mob-spark-fill-from: .28; /* [src] */
+  --mob-spark-fill-to:   .02; /* [src] */
+
+  /* Overlays */
+  --mob-modal-w:      520px;
+  --mob-popover-w:    260px;
+  --mob-tooltip-max-w:240px;
+  --mob-toast-w:      340px;
+  --mob-menu-max-h:   288px;
+
+  /* Section rhythm — reset per density zone below. */
+  --mob-section-gap:  var(--mob-space-64);
+  --mob-stack-gap:    var(--mob-space-14);
+  --mob-grid-gap:     var(--mob-space-20);
+}
+
+/* -----------------------------------------------------------------------------
+   DENSITY ZONES
+   One product legitimately needs three spacing temperaments. Rather than let
+   each screen invent its own, declare the zone and let the tokens move:
+
+     <section data-mob-density="marketing">   hero, landing, empty states
+     <main    data-mob-density="product">     default app surfaces
+     <div     data-mob-density="data">        tables, activity, dense grids
+
+   Only rhythm and card padding shift. Control geometry, radius and colour never
+   do — an M button is the same button in all three zones.
+   -------------------------------------------------------------------------- */
+[data-mob-density='marketing'] {
+  --mob-section-gap: var(--mob-space-128);
+  --mob-stack-gap:   var(--mob-space-24);
+  --mob-grid-gap:    var(--mob-space-32);
+  --mob-card-pad-y:  var(--mob-space-24);
+  --mob-card-pad-x:  var(--mob-space-24);
+}
+[data-mob-density='product'] {
+  --mob-section-gap: var(--mob-space-64);
+  --mob-stack-gap:   var(--mob-space-14);
+  --mob-grid-gap:    var(--mob-space-20);
+  --mob-card-pad-y:  15px;
+  --mob-card-pad-x:  16px;
+}
+[data-mob-density='data'] {
+  --mob-section-gap: var(--mob-space-32);
+  --mob-stack-gap:   var(--mob-space-8);
+  --mob-grid-gap:    var(--mob-space-12);
+  --mob-card-pad-y:  var(--mob-space-10);
+  --mob-card-pad-x:  var(--mob-space-12);
+}
+
+@media (max-width: 767px) {
+  :root {
+    --mob-section-gap: var(--mob-space-40);
+    --mob-card-pad-y:  var(--mob-space-14);
+    --mob-card-pad-x:  var(--mob-space-14);
+  }
+  [data-mob-density='marketing'] { --mob-section-gap: var(--mob-space-80); }
+}
+
+/* -----------------------------------------------------------------------------
+   ONE-HEX REBRAND  (optional)
+   Include css/brand.css AFTER tokens.css to derive the whole accent family from
+   a single brand colour instead of hand-picking five. The defaults above stay
+   canonical; this is the escape hatch for a project with its own brand.
+   -------------------------------------------------------------------------- */

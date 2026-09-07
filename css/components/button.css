@@ -1,0 +1,588 @@
+/* =============================================================================
+   mob-design — button + icon button
+   -----------------------------------------------------------------------------
+   The most-repeated control in the system. Tabs, menu items, chips and the
+   segmented range control all borrow their state language from this file, so a
+   1px drift here shows up on every screen.
+
+   ANATOMY
+
+     .mob-btn                                    inline-flex, one line, no wrap
+     ┌──────────────────────────────────────┐
+     │   [icon]   Label   [icon]            │    block-size    = --mob-control-h-*
+     └──────────────────────────────────────┘    padding-inline = --mob-control-px-*
+              └ gap = --mob-control-gap
+
+     .mob-icon-btn                               square target, icon only
+     ┌────────┐
+     │   ⌄    │                                  32 / 40 / 48 (mobb spec §4.2)
+     └────────┘
+
+     .mob-btn-group                              FUSED row. The seams are 1px
+     ┌─────────┬─────────┬─────────┐             GAPS over a --mob-bg-frame
+     │   1D    │   1W    │   1M    │             parent with overflow:hidden —
+     └─────────┴─────────┴─────────┘             they are never borders.
+
+   HOW THIS FILE IS PUT TOGETHER
+   Four locals do all the painting: --mob-btn-bg / --mob-btn-fg /
+   --mob-btn-border / --mob-btn-radius. The base rule paints with them once;
+   every variant and every state does nothing but reassign them. That is why a
+   state can never accidentally change geometry, and why the loading spinner can
+   pick up the current variant's colour without knowing which variant it is.
+
+   Cascade order below is load-bearing: base → sizes → variants (+ their hover
+   and press) → modifiers → shared states. Variant hover rules and the shared
+   disabled rule have equal specificity, so disabled wins by coming last. Do not
+   reorder the sections.
+
+   RULES FOR CONSUMERS
+   - Size is a step, never an ad-hoc height. --sm / --md (default) / --lg.
+   - One primary per action group. --primary is the only sans-serif variant.
+   - `--destroy` is the in-row destructive action (muted, repeats safely in a
+     list). `--danger` is the loud one for a modal's confirm button. Never put a
+     --danger button in a table row; never confirm a destructive modal with
+     --destroy.
+   - .mob-icon-btn has NO accessible name of its own. It MUST carry aria-label
+     (or a .mob-sr-only child). Shipping one without a label is a defect.
+   - [data-mob-loading] hides the label in place; DO NOT also empty the button.
+     The label is what reserves the width. Set aria-busy="true" alongside it.
+   - [data-mob-error] marks a control whose last invocation failed. Colour is not
+     a sufficient signal on its own — change the label to "Try again" and render
+     the reason next to it.
+   - `<a class="mob-btn">` is supported (link colours are overridden here).
+   - ::after is reserved by base.css for the coarse-pointer tap target, so the
+     spinner lives on ::before. Do not claim ::before in a consumer stylesheet.
+   - `transparent` appears below as the border of variants that draw none. It is
+     the absence of a colour rather than a colour choice; the border box itself
+     is always present so geometry never shifts between variants.
+
+   CALIBRATED MARKUP (the four buttons in Dashboard.dc.html)
+     <button class="mob-btn mob-btn--primary">New position</button>
+     <button class="mob-btn mob-btn--sm mob-btn--affirm  mob-btn--block">Claim</button>
+     <button class="mob-btn mob-btn--sm mob-btn--destroy mob-btn--block">Close</button>
+     <button class="mob-btn mob-btn--sm mob-btn--ghost   mob-btn--block"
+             aria-label="More actions">···</button>
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   -------------------------------------------------------------------------- */
+:root {
+  /* Label size per step. The two [src] values are the measured ones: the
+     product's primary button is 13px sans and its row actions are 11.5px mono.
+     Because the primary lands on the M step, M carries 13px — that is what
+     makes .mob-btn--primary reproduce the handoff exactly without the variant
+     having to override its own size. */
+  --mob-btn-font-sm: var(--mob-size-sm);  /* 11.5px [src] Claim / Close / ···  */
+  --mob-btn-font-md: var(--mob-size-lg);  /* 13px   [src] "New position"       */
+  --mob-btn-font-lg: var(--mob-size-xl);  /* 14px   [drv] one step up          */
+
+  /* Spinner. Sized per step so a loading S button does not sprout an L spinner. */
+  --mob-btn-spinner-sm: 12px;                      /* [drv] */
+  --mob-btn-spinner-md: 14px;                      /* [drv] */
+  --mob-btn-spinner-lg: var(--mob-control-icon);   /* [drv] 16px */
+  --mob-btn-spinner-stroke: 1.5px;                 /* [drv] hairline weight, same
+                                                      family as --mob-spark-stroke */
+  --mob-btn-spinner-track: 22%;                    /* [drv] share of --mob-btn-fg
+                                                      left in the un-lit ring   */
+  /* The motion scale stops at 260ms because it describes state transitions. A
+     continuous indeterminate spin needs a slower cycle than any of them or it
+     reads frantic, so the loop duration is a component token. */
+  --mob-btn-spinner-cycle: 640ms;                  /* [drv] */
+
+  /* Icon-button squares — mobb spec §4.2 (32/40/48), deliberately NOT the
+     control heights (30/34/40). A text control is sized by its line; an icon
+     button is sized by the target. Glyph boxes are the spec's §3.8 16/20/24. */
+  --mob-icon-btn-size-sm: 32px;                    /* [drv] */
+  --mob-icon-btn-size-md: 40px;                    /* [drv] */
+  --mob-icon-btn-size-lg: 48px;                    /* [drv] */
+  --mob-icon-btn-glyph-lg: 24px;                   /* [drv] spec §3.8 large icon */
+
+  /* Focus ring for a segment of a fused group. .mob-btn-group clips with
+     overflow:hidden, which would cut the outward --mob-focus-ring away
+     ENTIRELY — a grouped button would tab to no visible indicator at all. The
+     ring is therefore drawn inside the segment, which is the refinement of the
+     base.css focus contract that card.css and choice.css already make for the
+     same construction. Two pixels, like choice.css's segmented control: a
+     grouped button must not focus more faintly than the one beside it. */
+  --mob-btn-group-ring: inset 0 0 0 var(--mob-border-width-strong) var(--mob-focus-color); /* [drv] */
+
+  /* The "always darker" mixing partner. The semantic layer has no such token
+     because dark and light invert: in dark the canvas is the near-black end of
+     the ramp, in light the primary text is. Mixing a fill toward this token
+     therefore deepens it in BOTH themes, which is what a press must do. */
+  --mob-btn-shade: var(--mob-bg-canvas);           /* [drv] */
+}
+[data-mob-theme='light'] {
+  --mob-btn-shade: var(--mob-fg-primary);
+}
+/* -----------------------------------------------------------------------------
+   SHARED FOUNDATION
+   Locals + painting + motion. Everything both blocks agree on lives here; the
+   unmodified default is the secondary treatment so a bare <button class="mob-btn">
+   is already correct.
+   -------------------------------------------------------------------------- */
+.mob-btn,
+.mob-icon-btn {
+  --mob-btn-bg: var(--mob-bg-surface);
+  --mob-btn-fg: var(--mob-fg-secondary);
+  --mob-btn-border: var(--mob-border-control);
+  --mob-btn-radius: var(--mob-radius-md);
+
+  position: relative;              /* spinner + coarse-pointer tap target anchor */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--mob-control-gap);
+
+  background-color: var(--mob-btn-bg);
+  color: var(--mob-btn-fg);
+  /* The border box is always present, even when its colour is transparent, so a
+     ghost and a secondary button of the same size are the same size. */
+  border: var(--mob-border-width) solid var(--mob-btn-border);
+  border-radius: var(--mob-btn-radius);
+
+  font-family: var(--mob-font-mono);
+  font-weight: var(--mob-weight-regular);
+  line-height: var(--mob-leading-flat);
+  letter-spacing: var(--mob-tracking-normal);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  text-decoration: none;           /* <a class="mob-btn"> */
+  white-space: nowrap;
+
+  appearance: none;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
+
+  /* Colour and press only. Never width, height, margin or inset — see the
+     anti-pattern list: no layout shift on hover. */
+  transition:
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    border-color     var(--mob-duration-fast) var(--mob-ease-standard),
+    color            var(--mob-duration-fast) var(--mob-ease-standard),
+    transform        var(--mob-duration-instant) var(--mob-ease-standard);
+}
+
+/* -----------------------------------------------------------------------------
+   BLOCK — .mob-btn
+   Geometry defaults to the M step; .mob-btn--md restates it for authors who
+   prefer to be explicit.
+   -------------------------------------------------------------------------- */
+.mob-btn {
+  --mob-btn-font: var(--mob-btn-font-md);
+  --mob-btn-spinner: var(--mob-btn-spinner-md);
+
+  block-size: var(--mob-control-h-md);
+  padding-block: 0;
+  padding-inline: var(--mob-control-px-md);
+  font-size: var(--mob-btn-font);
+}
+
+/* Elements. Both are optional — a bare text node is the common case. */
+.mob-btn__icon,
+.mob-btn > svg {
+  flex: 0 0 auto;
+  inline-size: var(--mob-control-icon);
+  block-size: var(--mob-control-icon);
+}
+/* Only needed when the button may be squeezed by its column. Without it a long
+   label overflows, because buttons never wrap. */
+.mob-btn__label {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -----------------------------------------------------------------------------
+   BLOCK — .mob-icon-btn
+   Square, icon only, same state language. Defaults to the M square (40px).
+   -------------------------------------------------------------------------- */
+.mob-icon-btn {
+  --mob-icon-btn-size: var(--mob-icon-btn-size-md);
+  --mob-icon-btn-glyph: var(--mob-control-icon-lg);
+  --mob-btn-spinner: var(--mob-btn-spinner-md);
+
+  flex: 0 0 auto;                  /* a square must not be stretched by a flex row */
+  inline-size: var(--mob-icon-btn-size);
+  block-size: var(--mob-icon-btn-size);
+  padding: 0;
+  font-size: var(--mob-btn-font-sm);   /* for glyph labels such as ··· */
+}
+.mob-icon-btn > svg,
+.mob-icon-btn > img,
+.mob-icon-btn > .mob-btn__icon {
+  inline-size: var(--mob-icon-btn-glyph);
+  block-size: var(--mob-icon-btn-glyph);
+}
+
+/* -----------------------------------------------------------------------------
+   SIZE STEPS
+   Height, inline padding, radius and label size move together — a size step is
+   one decision, not four. Radius tracks height on purpose (8 / 9 / 10): an S and
+   an L button must read as the same shape family seen at two scales, not as two
+   different products. That is also why nothing here sets a bare height.
+   -------------------------------------------------------------------------- */
+.mob-btn--sm {
+  --mob-btn-radius: var(--mob-radius-sm);
+  --mob-btn-font: var(--mob-btn-font-sm);
+  --mob-btn-spinner: var(--mob-btn-spinner-sm);
+  block-size: var(--mob-control-h-sm);
+  padding-inline: var(--mob-control-px-sm);
+}
+.mob-btn--md {
+  --mob-btn-radius: var(--mob-radius-md);
+  --mob-btn-font: var(--mob-btn-font-md);
+  --mob-btn-spinner: var(--mob-btn-spinner-md);
+  block-size: var(--mob-control-h-md);
+  padding-inline: var(--mob-control-px-md);
+}
+.mob-btn--lg {
+  --mob-btn-radius: var(--mob-radius-lg);
+  --mob-btn-font: var(--mob-btn-font-lg);
+  --mob-btn-spinner: var(--mob-btn-spinner-lg);
+  block-size: var(--mob-control-h-lg);
+  padding-inline: var(--mob-control-px-lg);
+}
+.mob-btn--lg > svg,
+.mob-btn--lg .mob-btn__icon {
+  inline-size: var(--mob-control-icon-lg);
+  block-size: var(--mob-control-icon-lg);
+}
+
+.mob-icon-btn--sm {
+  --mob-icon-btn-size: var(--mob-icon-btn-size-sm);
+  --mob-icon-btn-glyph: var(--mob-control-icon);
+  --mob-btn-radius: var(--mob-radius-sm);
+  --mob-btn-spinner: var(--mob-btn-spinner-sm);
+}
+.mob-icon-btn--md {
+  --mob-icon-btn-size: var(--mob-icon-btn-size-md);
+  --mob-icon-btn-glyph: var(--mob-control-icon-lg);
+  --mob-btn-radius: var(--mob-radius-md);
+  --mob-btn-spinner: var(--mob-btn-spinner-md);
+}
+.mob-icon-btn--lg {
+  --mob-icon-btn-size: var(--mob-icon-btn-size-lg);
+  --mob-icon-btn-glyph: var(--mob-icon-btn-glyph-lg);
+  --mob-btn-radius: var(--mob-radius-lg);
+  --mob-btn-spinner: var(--mob-btn-spinner-lg);
+}
+
+/* -----------------------------------------------------------------------------
+   VARIANTS
+   Tone only — never geometry. Each variant owns its rest state and its hover;
+   press, focus, selected, disabled, loading and error are shared further down.
+   Rest tones are muted by policy: saturation is spent on hover.
+   -------------------------------------------------------------------------- */
+
+/* PRIMARY  [src] — "New position": system sans 13px/500, --mob-fg-on-accent on
+   --mob-accent, radius 9, padding-inline 15, hover --mob-accent-hover, active
+   scale. The one variant that leaves mono, and the only one allowed to: it is a
+   page-level call to action, not metadata. One per action group. */
+.mob-btn--primary,
+.mob-icon-btn--primary {
+  --mob-btn-bg: var(--mob-accent);
+  --mob-btn-fg: var(--mob-fg-on-accent);
+  --mob-btn-border: var(--mob-btn-bg);   /* invisible: the fill is the edge */
+}
+.mob-btn--primary {
+  font-family: var(--mob-font-sans);
+  font-weight: var(--mob-weight-medium);
+}
+.mob-btn--primary:hover,
+.mob-icon-btn--primary:hover {
+  --mob-btn-bg: var(--mob-accent-hover);
+}
+.mob-btn--primary:active,
+.mob-icon-btn--primary:active {
+  --mob-btn-bg: var(--mob-accent-pressed);   /* [drv] the handoff presses by scale
+                                                alone; the token exists, so use it */
+}
+
+/* SECONDARY — the default treatment, restated so it can be written explicitly
+   and so it can win back over an inherited variant. */
+.mob-btn--secondary,
+.mob-icon-btn--secondary {
+  --mob-btn-bg: var(--mob-bg-surface);
+  --mob-btn-fg: var(--mob-fg-secondary);
+  --mob-btn-border: var(--mob-border-control);
+}
+.mob-btn--secondary:hover,
+.mob-icon-btn--secondary:hover {
+  --mob-btn-bg: var(--mob-bg-hover);
+  --mob-btn-fg: var(--mob-fg-primary);
+  --mob-btn-border: var(--mob-border-strong);
+}
+
+/* GHOST  [src] — the "···" overflow control: muted text, no fill, control
+   border. Hover lifts the surface and the text; the border deliberately does
+   NOT move, which is what keeps a row of ghosts from flickering as the pointer
+   crosses them. */
+.mob-btn--ghost,
+.mob-icon-btn--ghost {
+  --mob-btn-bg: transparent;
+  --mob-btn-fg: var(--mob-fg-muted);
+  --mob-btn-border: var(--mob-border-control);
+}
+.mob-btn--ghost:hover,
+.mob-icon-btn--ghost:hover {
+  --mob-btn-bg: var(--mob-bg-hover);
+  --mob-btn-fg: var(--mob-fg-secondary);
+}
+
+/* QUIET — no border at all. For toolbars and card corners, where a border on
+   every affordance would build the grid-heavy enterprise look the system
+   avoids. This is the right default for a toolbar .mob-icon-btn. */
+.mob-btn--quiet,
+.mob-icon-btn--quiet {
+  --mob-btn-bg: transparent;
+  --mob-btn-fg: var(--mob-fg-muted);
+  --mob-btn-border: transparent;
+}
+.mob-btn--quiet:hover,
+.mob-icon-btn--quiet:hover {
+  --mob-btn-bg: var(--mob-bg-hover);
+  --mob-btn-fg: var(--mob-fg-primary);
+}
+
+/* AFFIRM  [src] — "money in" (Claim). Calibrated muted green: the intent must
+   read without the row glowing, so all three channels are desaturated at rest
+   and only hover adds saturation. Calibrated form is
+   .mob-btn--sm.mob-btn--affirm.mob-btn--block → mono 11.5px, radius 8, full
+   width of the actions segment, stacked at --mob-control-gap. */
+.mob-btn--affirm,
+.mob-icon-btn--affirm {
+  --mob-btn-bg: var(--mob-affirm-bg);
+  --mob-btn-fg: var(--mob-affirm-fg);
+  --mob-btn-border: var(--mob-affirm-border);
+}
+.mob-btn--affirm:hover,
+.mob-icon-btn--affirm:hover {
+  --mob-btn-bg: var(--mob-affirm-bg-hover);
+  --mob-btn-fg: var(--mob-affirm-fg-hover);
+  --mob-btn-border: var(--mob-affirm-border-hover);
+}
+
+/* DESTROY  [src] — the in-row destructive action (Close). Muted red, same
+   contract as --affirm: it may repeat once per row without the table turning
+   red. Confirm the consequence elsewhere; this button opens the confirmation,
+   it is not the confirmation. */
+.mob-btn--destroy,
+.mob-icon-btn--destroy {
+  --mob-btn-bg: var(--mob-destroy-bg);
+  --mob-btn-fg: var(--mob-destroy-fg);
+  --mob-btn-border: var(--mob-destroy-border);
+}
+.mob-btn--destroy:hover,
+.mob-icon-btn--destroy:hover {
+  --mob-btn-bg: var(--mob-destroy-bg-hover);
+  --mob-btn-fg: var(--mob-destroy-fg-hover);
+  --mob-btn-border: var(--mob-destroy-border-hover);
+}
+
+/* DANGER  [drv] — the loud destructive action: a modal's confirm button, a
+   settings "Danger zone" trigger. Filled, so it cannot be mistaken for the
+   cancel next to it. Text is --mob-fg-inverse rather than --mob-fg-on-accent
+   because the negative hue sits on the 400 luminance tier in dark mode, where
+   white-on-red would fail contrast; inverse resolves near-black on dark and
+   white on light, so both themes stay legible.
+   Use at most one per surface, and never inside a list row — that is --destroy. */
+.mob-btn--danger,
+.mob-icon-btn--danger {
+  --mob-btn-bg: var(--mob-negative);
+  --mob-btn-fg: var(--mob-fg-inverse);
+  --mob-btn-border: var(--mob-btn-bg);
+}
+.mob-btn--danger:hover,
+.mob-icon-btn--danger:hover {
+  --mob-btn-bg: var(--mob-negative-raised);
+}
+.mob-btn--danger:active,
+.mob-icon-btn--danger:active {
+  --mob-btn-bg: color-mix(in oklab, var(--mob-negative) 86%, var(--mob-btn-shade));
+}
+
+/* -----------------------------------------------------------------------------
+   MODIFIERS
+   -------------------------------------------------------------------------- */
+
+/* Full width.  [src] the stacked Claim / Close / ··· actions segment. */
+.mob-btn--block {
+  display: flex;
+  inline-size: 100%;
+}
+
+/* Pill. Deliberately opt-in: "everything in a pill" is on the anti-pattern
+   list. Legitimate for a single standalone filter or toggle affordance; not a
+   default, and never for a row of form actions. */
+.mob-btn--pill {
+  --mob-btn-radius: var(--mob-radius-full);
+}
+
+/* --- Fused group ------------------------------------------------------------
+   The signature construction, applied to controls: the parent paints
+   --mob-bg-frame, children sit on their own fills, and the 1px flex gap is what
+   you read as a hairline. Children are shrinkable so a group never overflows a
+   narrow column. Children draw no borders of their own — two adjacent 1px
+   borders plus a 1px gap would read as a 3px seam. */
+.mob-btn-group {
+  --mob-btn-radius: var(--mob-radius-md);
+  display: inline-flex;
+  align-items: stretch;
+  gap: var(--mob-hairline);
+  max-inline-size: 100%;
+  background-color: var(--mob-bg-frame);
+  border: var(--mob-border-width) solid var(--mob-border-default);
+  border-radius: var(--mob-btn-radius);
+  overflow: hidden;                 /* clips the children's square corners */
+}
+.mob-btn-group--block {
+  display: flex;
+  inline-size: 100%;
+}
+/* Radius follows the children's step so the group reads as one control. */
+.mob-btn-group:has(.mob-btn--sm, .mob-icon-btn--sm) { --mob-btn-radius: var(--mob-radius-sm); }
+.mob-btn-group:has(.mob-btn--lg, .mob-icon-btn--lg) { --mob-btn-radius: var(--mob-radius-lg); }
+
+.mob-btn-group > .mob-btn,
+.mob-btn-group > .mob-icon-btn {
+  --mob-btn-radius: 0;
+  /* The seam is the parent showing through a 1px gap. This kills the border as
+     a property rather than by reassigning --mob-btn-border, so that a segment
+     which is later selected, disabled or errored — all of which do reassign
+     that local — still cannot draw an edge inside the fused construction. */
+  border-color: transparent;
+  min-inline-size: 0;
+}
+.mob-btn-group > .mob-btn { flex: 1 1 auto; }
+.mob-btn-group > .mob-icon-btn { flex: 0 0 auto; }
+/* Transparent variants would let the frame colour through inside a group, so
+   they are given the surface fill back. Targeted on purpose: a --primary or
+   --danger segment keeps its own fill. */
+.mob-btn-group > .mob-btn--ghost,
+.mob-btn-group > .mob-btn--quiet,
+.mob-btn-group > .mob-icon-btn--ghost,
+.mob-btn-group > .mob-icon-btn--quiet {
+  --mob-btn-bg: var(--mob-bg-surface);
+}
+/* Focus inside the frame. The group's overflow:hidden clips outward box-shadows,
+   so the shared --mob-focus-ring below would be clipped to nothing and a keyboard
+   user would tab through a 1D/1W/1M switch with no indicator whatsoever. Drawn
+   inside instead — a refinement of the base.css ring, never a deletion of it.
+   Higher specificity than the shared rule, so it wins wherever it is written. */
+.mob-btn-group > .mob-btn:focus-visible,
+.mob-btn-group > .mob-icon-btn:focus-visible {
+  box-shadow: var(--mob-btn-group-ring);
+}
+/* -----------------------------------------------------------------------------
+   SHARED STATES
+   Order matters from here down: press → focus → selected → disabled → loading →
+   error. Everything below sits at or above the specificity of a variant hover,
+   so later rules legitimately win.
+   -------------------------------------------------------------------------- */
+
+/* PRESSED — one scale token for every control in the system. Transform only:
+   nothing reflows, and the coarse-pointer tap target scales with it. */
+.mob-btn:active,
+.mob-icon-btn:active {
+  transform: scale(var(--mob-press-scale));
+}
+
+/* FOCUS-VISIBLE — non-negotiable. The global contract in base.css also forces
+   --mob-radius-sm on the focused element; restating the local radius here keeps
+   an L button from squaring off by 2px the moment it is tabbed to. */
+.mob-btn:focus-visible,
+.mob-icon-btn:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-focus-ring);
+  border-radius: var(--mob-btn-radius);
+}
+
+/* SELECTED — a toggle button or a segment of a fused group. Deliberately does
+   not respond to hover: it is already the state, and hover belongs to the
+   segments you can still move to. Drive it from ARIA, never from a class. */
+.mob-btn[aria-pressed='true'],
+.mob-btn[aria-selected='true'],
+.mob-btn[aria-current]:not([aria-current='false']),
+.mob-icon-btn[aria-pressed='true'],
+.mob-icon-btn[aria-selected='true'],
+.mob-icon-btn[aria-current]:not([aria-current='false']) {
+  --mob-btn-bg: var(--mob-bg-selected);
+  --mob-btn-fg: var(--mob-fg-primary);
+  --mob-btn-border: var(--mob-border-strong);
+}
+
+/* DISABLED — must not read as a normal secondary control. Contrast drops on all
+   three channels AND the affordances go: no hover response, no press, no
+   pointer. The border collapses to --mob-border-subtle so the shape stops
+   looking like an edge you can act on. Keep it focusable via aria-disabled when
+   the user needs to discover why it is off. */
+.mob-btn:disabled,
+.mob-btn[aria-disabled='true'],
+.mob-icon-btn:disabled,
+.mob-icon-btn[aria-disabled='true'] {
+  --mob-btn-bg: var(--mob-bg-disabled);
+  --mob-btn-fg: var(--mob-fg-disabled);
+  --mob-btn-border: var(--mob-border-subtle);
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* LOADING — the box never changes size. The label stays in the DOM and simply
+   stops painting, so the width it reserved is the width the button keeps.
+   pointer-events:none also removes hover and press for free. */
+.mob-btn[data-mob-loading],
+.mob-icon-btn[data-mob-loading] {
+  color: transparent;              /* hides a bare text-node label in place */
+  cursor: default;
+  pointer-events: none;
+}
+/* Element children (icons, .mob-btn__label) do not inherit a transparent
+   colour, so hide them too — visibility, not display: they must keep occupying
+   their space. Pseudo-elements are not matched by `> *`, so the spinner and the
+   tap target survive. */
+.mob-btn[data-mob-loading] > *,
+.mob-icon-btn[data-mob-loading] > * {
+  visibility: hidden;
+}
+.mob-btn[data-mob-loading]::before,
+.mob-icon-btn[data-mob-loading]::before {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  translate: -50% -50%;             /* composes with the animation's rotate() */
+  inline-size: var(--mob-btn-spinner);
+  block-size: var(--mob-btn-spinner);
+  border: var(--mob-btn-spinner-stroke) solid
+          color-mix(in srgb, var(--mob-btn-fg) var(--mob-btn-spinner-track), transparent);
+  /* Logical, so the lit arc starts at the top in every writing mode. Reads the
+     variant's own foreground, which is why no variant needs a spinner rule. */
+  border-block-start-color: var(--mob-btn-fg);
+  border-radius: var(--mob-radius-full);
+  animation: mob-spin var(--mob-btn-spinner-cycle) linear infinite;
+}
+
+/* ERROR — the last invocation failed and the control is offering a retry. Not a
+   variant: it can land on any of them, and it leaves the geometry alone. Colour
+   is not a sufficient signal — change the label and show the reason. */
+.mob-btn[data-mob-error],
+.mob-icon-btn[data-mob-error] {
+  --mob-btn-bg: var(--mob-negative-tint);
+  --mob-btn-fg: var(--mob-negative);
+  --mob-btn-border: color-mix(in oklab, var(--mob-negative) 34%, var(--mob-border-control));
+}
+/* Guarded: this is the only state rule that outranks the disabled block, so it
+   has to opt out of disabled explicitly. Disabled always wins. */
+.mob-btn[data-mob-error]:hover:not(:disabled, [aria-disabled='true']),
+.mob-icon-btn[data-mob-error]:hover:not(:disabled, [aria-disabled='true']) {
+  --mob-btn-fg: var(--mob-negative-raised);
+  --mob-btn-border: color-mix(in oklab, var(--mob-negative) 52%, var(--mob-border-control));
+}

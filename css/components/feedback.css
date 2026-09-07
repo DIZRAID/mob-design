@@ -1,0 +1,931 @@
+/* =============================================================================
+   mob-design — feedback
+   -----------------------------------------------------------------------------
+   Everything the product says back to the user: transient notices (toast),
+   persistent notices (alert, banner), absence (empty), failure (error-state),
+   and the two ways of saying "not yet" (skeleton, spinner) plus the one way of
+   saying "how far" (progress).
+
+   ANATOMY
+   -------
+   .mob-toast-region                fixed stack, pointer-events:none
+     └ .mob-toast                   pointer-events:auto
+        ├ ::before                  leading accent bar (tone)
+        ├ .mob-toast__icon          tone glyph — the non-colour signal
+        ├ .mob-toast__title
+        ├ .mob-toast__body
+        ├ .mob-toast__action        one inline action, e.g. Undo
+        └ .mob-toast__close
+
+   .mob-alert                       inline, persistent, tinted
+     ├ __icon  ├ __title  ├ __body  ├ __action  └ __close
+
+   .mob-banner                      full-bleed, page level
+     ├ __icon  ├ __text  ├ __action  └ __close
+
+   .mob-empty                       dashed panel
+     ├ __visual  ├ __title  ├ __sub  └ __actions ( primary + secondary )
+
+   .mob-error-state                 ├ __icon  ├ __message  └ __retry
+
+   .mob-skeleton[--text|--title|--circle|--block]   inside .mob-skeleton-group
+   .mob-spinner[--sm|--md|--lg]
+   .mob-progress > .mob-progress__fill              [--indeterminate]
+
+   RULES FOR CONSUMERS
+   -------------------
+   1. A toast is for information the user does NOT have to remember or act on
+      later. Anything that must survive a page change, be re-read, or be acted
+      on after a delay is a .mob-alert or a .mob-banner — never a toast.
+   2. Tone is set with data-mob-tone="info|success|warning|error" (equivalent
+      --info/--success/--warning/--error modifiers exist for class-only stacks).
+      Tone drives colour AND the icon glyph: colour is never the only signal.
+      Leave __icon empty to get the tone's default glyph; put an <svg> in it to
+      override.
+   3. Skeletons preserve layout — use them when the shape of the result is known
+      and you are filling it in. Spinners are for isolated async actions of
+      unknown size (a button, a retry). Never a spinner where a skeleton fits.
+   4. Loading never resizes anything here. [data-mob-loading] on an action keeps
+      the label in flow and swaps the ink for a spinner in place.
+   5. Close buttons are labelled with aria-label, NOT inner text — the × glyph is
+      drawn only while the button is empty, so a nested .mob-sr-only span would
+      erase it.
+   6. Wire the ARIA yourself: the toast region is role="region" aria-live="polite"
+      (assertive for errors), .mob-progress is role="progressbar" with
+      aria-valuenow/min/max, an indeterminate bar omits aria-valuenow, and a
+      skeleton block is aria-hidden with one .mob-sr-only "Loading" live region
+      per group.
+
+   MOTION
+   ------
+   Transitions are limited to colour, opacity and transform, per the motion
+   system (§6: hover → background/border/opacity, press → scale). No geometry is
+   ever transitioned — no width, height, inset or margin. Durations come from
+   tokens; the two long loops (shimmer, indeterminate sweep) are derived as
+   multiples of --mob-duration-enter because the scale tops out at 260ms.
+   reset.css already neutralises all of it under prefers-reduced-motion, so every
+   looping animation here is built to park in a still-legible resting state.
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   Off-scale geometry lives here, never inline in a rule.
+   [src] = measured in the calibrated handoff · [drv] = derived by a stated rule
+   -------------------------------------------------------------------------- */
+:root {
+  /* Shared ------------------------------------------------------------------ */
+  --mob-feedback-dir:   1;      /* inline-axis sign; flipped under :dir(rtl)   */
+  --mob-feedback-icon:  var(--mob-control-icon); /* [drv] tone glyph box       */
+  --mob-feedback-close: 20px;   /* [drv] compact close, one step under ctrl-S  */
+  --mob-feedback-close-arm: 9px;/* [drv] length of one × stroke                */
+  /* Focus ring re-based onto the component's own surface. The global ring's
+     inner layer is --mob-bg-canvas, which reads as a hole when the control sits
+     on an elevated or tinted panel. Refining the ring is allowed; deleting it
+     is not.                                                                    */
+  --mob-feedback-ring-bg: var(--mob-bg-canvas);
+  --mob-feedback-ring:
+    0 0 0 var(--mob-border-width-strong) var(--mob-feedback-ring-bg),
+    0 0 0 calc(var(--mob-border-width-strong) * 2) var(--mob-focus-color);
+
+  /* Toast ------------------------------------------------------------------- */
+  --mob-toast-pad-y:   var(--mob-card-pad-y-sm); /* [src] 12px, mini-card pad  */
+  --mob-toast-pad-x:   var(--mob-card-pad-x-sm); /* [src] 13px                 */
+  --mob-toast-gap:     var(--mob-space-10);
+  --mob-toast-radius:  var(--mob-radius-lg);
+  --mob-toast-bar-w:   var(--mob-space-3);       /* [drv] tone bar             */
+  --mob-toast-enter-x: var(--mob-space-8);       /* [drv] spec §6: 4–8px slide */
+  --mob-toast-region-inset: var(--mob-space-20);
+  --mob-toast-region-gap:   var(--mob-space-10);
+
+  /* Alert ------------------------------------------------------------------- */
+  --mob-alert-pad-y:  var(--mob-card-pad-y-sm);  /* [src] 12px */
+  --mob-alert-pad-x:  var(--mob-card-pad-x-sm);  /* [src] 13px */
+  --mob-alert-gap:    var(--mob-space-10);
+  --mob-alert-radius: var(--mob-radius-lg);
+
+  /* Banner ------------------------------------------------------------------ */
+  --mob-banner-pad-y: var(--mob-space-10);
+  --mob-banner-pad-x: var(--mob-gutter-desktop); /* [src] 26px page gutter */
+  --mob-banner-gap:   var(--mob-space-10);
+
+  /* Skeleton ---------------------------------------------------------------- */
+  --mob-skeleton-bg:     var(--mob-bg-tile);     /* [src] #141518 */
+  --mob-skeleton-radius: var(--mob-radius-2xs);  /* [src] 3px, same as bars */
+  /* Sheen is mixed from the text colour, not from a white alpha, so it inverts
+     with the theme instead of washing out the light-mode tile.                 */
+  --mob-skeleton-sheen:  color-mix(in srgb, var(--mob-fg-primary) 6%, transparent);
+  --mob-skeleton-text-h:  9px;  /* [drv] ink band of 12–12.5px mono            */
+  --mob-skeleton-title-h: 14px; /* [drv] ink band of --mob-size-xl sans 600    */
+  --mob-skeleton-line-gap: var(--mob-space-8);
+  --mob-skeleton-text-last: 62%;/* [drv] a last line never fills the measure   */
+  --mob-skeleton-circle: var(--mob-avatar-md);   /* [src] 24px list-row avatar */
+  --mob-skeleton-block-h: var(--mob-space-64);   /* override per use site      */
+  --mob-skeleton-sweep-duration: calc(var(--mob-duration-enter) * 5); /* 1300ms */
+
+  /* Spinner ----------------------------------------------------------------- */
+  --mob-spinner-size:    var(--mob-control-icon);    /* 16px, md */
+  --mob-spinner-size-sm: 12px;                        /* [drv]    */
+  --mob-spinner-size-lg: var(--mob-control-icon-lg);  /* 20px     */
+  --mob-spinner-stroke:  1.5px;                       /* [drv] sparkline family */
+  --mob-spinner-stroke-lg: var(--mob-border-width-strong);
+  --mob-spinner-track:   color-mix(in srgb, currentColor 18%, transparent);
+  --mob-spin-duration:   calc(var(--mob-duration-slow) * 3); /* 660ms */
+
+  /* Progress ---------------------------------------------------------------- */
+  --mob-progress-h:        var(--mob-bar-h);      /* [src] 5px composition bar */
+  --mob-progress-h-lg:     var(--mob-space-8);
+  --mob-progress-radius:   var(--mob-bar-radius); /* [src] 3px */
+  --mob-progress-track:    var(--mob-bg-frame);
+  --mob-progress-fill:     var(--mob-accent);
+  --mob-progress-indeterminate-w: 40%;            /* [drv] */
+  --mob-progress-duration: calc(var(--mob-duration-enter) * 5); /* 1300ms */
+
+  /* Empty state ------------------------------------------------------------- */
+  --mob-empty-pad-y:    var(--mob-space-32);
+  --mob-empty-pad-x:    var(--mob-space-24);
+  --mob-empty-pad-y-sm: var(--mob-space-20);
+  --mob-empty-pad-x-sm: var(--mob-space-16);
+  --mob-empty-radius:   var(--mob-radius-lg);     /* [src] "radius 10–12px" */
+  --mob-empty-gap:      var(--mob-space-6);
+  --mob-empty-max-w:    300px;  /* [drv] measure that keeps the sub to 2 lines */
+  --mob-empty-visual:   var(--mob-control-h-lg); /* [drv] */
+
+  /* Error state ------------------------------------------------------------- */
+  --mob-error-gap:  var(--mob-space-8);
+  --mob-error-icon: 14px; /* [drv] sized to the 10.5px message, not to a control */
+}
+
+/* The inline axis has a sign, and translate/keyframes are physical. One token
+   carries the flip so every sliding thing in this file is RTL-correct. Two
+   separate rules: an engine without :dir() must not drop the [dir] rule too. */
+:dir(rtl)     { --mob-feedback-dir: -1; }
+[dir='rtl']   { --mob-feedback-dir: -1; }
+
+/* -----------------------------------------------------------------------------
+   TONE SYSTEM
+   Toast, alert and banner share one tone contract, so a "success" reads the
+   same wherever it appears. Four local tokens; every tone sets all four.
+   --mob-feedback-border is derived by one formula rather than picked per tone.
+   -------------------------------------------------------------------------- */
+.mob-toast,
+.mob-alert,
+.mob-banner {
+  /* Neutral default: a notice with no severity. */
+  --mob-feedback-fg:     var(--mob-fg-muted-hi);
+  --mob-feedback-raised: var(--mob-fg-secondary);
+  --mob-feedback-tint:   var(--mob-bg-surface-raised);
+  --mob-feedback-action: var(--mob-accent-bright);
+  --mob-feedback-glyph:  '•';
+  --mob-feedback-border: color-mix(in srgb, var(--mob-feedback-fg) 26%, var(--mob-border-default));
+}
+
+[data-mob-tone='info'],
+.mob-toast--info, .mob-alert--info, .mob-banner--info {
+  --mob-feedback-fg:     var(--mob-info);
+  --mob-feedback-raised: var(--mob-info-raised);
+  --mob-feedback-tint:   var(--mob-info-tint);
+  --mob-feedback-action: var(--mob-info);
+  --mob-feedback-glyph:  'i';
+}
+[data-mob-tone='success'],
+.mob-toast--success, .mob-alert--success, .mob-banner--success {
+  --mob-feedback-fg:     var(--mob-positive);
+  --mob-feedback-raised: var(--mob-positive-raised);
+  --mob-feedback-tint:   var(--mob-positive-tint);
+  --mob-feedback-action: var(--mob-positive);
+  --mob-feedback-glyph:  '✓';
+}
+[data-mob-tone='warning'],
+.mob-toast--warning, .mob-alert--warning, .mob-banner--warning {
+  --mob-feedback-fg:     var(--mob-warning);
+  --mob-feedback-raised: var(--mob-warning-raised);
+  --mob-feedback-tint:   var(--mob-warning-tint);
+  --mob-feedback-action: var(--mob-warning);
+  --mob-feedback-glyph:  '!';
+}
+[data-mob-tone='error'],
+.mob-toast--error, .mob-alert--error, .mob-banner--error {
+  --mob-feedback-fg:     var(--mob-negative);
+  --mob-feedback-raised: var(--mob-negative-raised);
+  --mob-feedback-tint:   var(--mob-negative-tint);
+  --mob-feedback-action: var(--mob-negative);
+  --mob-feedback-glyph:  '✕';
+}
+
+/* -----------------------------------------------------------------------------
+   SHARED PARTS
+   Icon slot, inline action and close button are identical across toast, alert
+   and banner by design: repetition must be exact, so it is written once.
+   -------------------------------------------------------------------------- */
+
+/* --- Tone glyph ----------------------------------------------------------- */
+.mob-toast__icon,
+.mob-alert__icon,
+.mob-banner__icon,
+.mob-error-state__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: var(--mob-feedback-icon);
+  block-size: var(--mob-feedback-icon);
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-2xs);
+  line-height: var(--mob-leading-flat);
+  color: var(--mob-feedback-fg);
+}
+.mob-toast__icon > svg,
+.mob-alert__icon > svg,
+.mob-banner__icon > svg,
+.mob-error-state__icon > svg { inline-size: 100%; block-size: 100%; }
+
+/* Drawn only while the slot is empty, so a real icon simply wins. */
+.mob-toast__icon:empty::before,
+.mob-alert__icon:empty::before,
+.mob-banner__icon:empty::before { content: var(--mob-feedback-glyph, '•'); }
+
+/* --- Inline action --------------------------------------------------------
+   A text action, not a button: it lives inside a notice and must not compete
+   with the page's real controls. Underlined at rest so it is distinguishable
+   without hover; saturation arrives only on hover.                            */
+.mob-toast__action,
+.mob-alert__action,
+.mob-banner__action,
+.mob-error-state__retry {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mob-control-gap);
+  padding-block: var(--mob-space-2);
+  padding-inline: 0;
+  border: 0;
+  border-radius: var(--mob-radius-xs);
+  background: none;
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-sm);
+  line-height: var(--mob-leading-flat);
+  color: var(--mob-feedback-action);
+  text-decoration: underline;
+  text-decoration-thickness: var(--mob-border-width);
+  text-underline-offset: var(--mob-space-3);
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    text-decoration-color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+.mob-toast__action:hover,
+.mob-alert__action:hover,
+.mob-banner__action:hover,
+.mob-error-state__retry:hover {
+  color: var(--mob-feedback-raised);
+  text-decoration-color: currentColor;
+}
+.mob-toast__action:focus-visible,
+.mob-alert__action:focus-visible,
+.mob-banner__action:focus-visible,
+.mob-error-state__retry:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-feedback-ring);
+  border-radius: var(--mob-radius-xs);
+}
+.mob-toast__action:active,
+.mob-alert__action:active,
+.mob-banner__action:active,
+.mob-error-state__retry:active { transform: scale(var(--mob-press-scale)); }
+
+/* Disabled: contrast drops AND the affordance goes — no underline, no pointer,
+   no hover response. It must not read as a quiet secondary action.            */
+.mob-toast__action:disabled,
+.mob-alert__action:disabled,
+.mob-banner__action:disabled,
+.mob-error-state__retry:disabled,
+.mob-toast__action[aria-disabled='true'],
+.mob-alert__action[aria-disabled='true'],
+.mob-banner__action[aria-disabled='true'],
+.mob-error-state__retry[aria-disabled='true'] {
+  color: var(--mob-fg-disabled);
+  text-decoration-color: transparent;
+  cursor: not-allowed;
+  pointer-events: none;
+  transform: none;
+}
+
+/* Loading: the label stays in flow (width is reserved), its ink goes, and a
+   spinner is drawn in place. Nothing moves. */
+.mob-toast__action[data-mob-loading],
+.mob-alert__action[data-mob-loading],
+.mob-banner__action[data-mob-loading],
+.mob-error-state__retry[data-mob-loading] {
+  color: transparent;
+  text-decoration-color: transparent;
+  pointer-events: none;
+}
+.mob-toast__action[data-mob-loading]::after,
+.mob-alert__action[data-mob-loading]::after,
+.mob-banner__action[data-mob-loading]::after,
+.mob-error-state__retry[data-mob-loading]::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  translate: -50% -50%;
+  inline-size: var(--mob-spinner-size-sm);
+  block-size: var(--mob-spinner-size-sm);
+  border: var(--mob-spinner-stroke) solid var(--mob-spinner-track);
+  border-block-start-color: var(--mob-feedback-action);
+  border-radius: var(--mob-radius-full);
+  animation: mob-spin var(--mob-spin-duration) linear infinite;
+}
+
+/* --- Close button ---------------------------------------------------------- */
+.mob-toast__close,
+.mob-alert__close,
+.mob-banner__close {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: var(--mob-feedback-close);
+  block-size: var(--mob-feedback-close);
+  border: 0;
+  border-radius: var(--mob-radius-xs);
+  background: none;
+  color: var(--mob-fg-label);
+  cursor: pointer;
+  transition:
+    color var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard),
+    transform var(--mob-duration-instant) var(--mob-ease-standard);
+}
+/* The × is two hairlines, so it matches the 1px language exactly at any DPR.
+   Only drawn while the slot is empty — label with aria-label, not inner text. */
+.mob-toast__close:empty::before,  .mob-toast__close:empty::after,
+.mob-alert__close:empty::before,  .mob-alert__close:empty::after,
+.mob-banner__close:empty::before, .mob-banner__close:empty::after {
+  content: '';
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  inline-size: var(--mob-feedback-close-arm);
+  block-size: var(--mob-border-width);
+  background: currentColor;
+  translate: -50% -50%;
+}
+/* `rotate` is the independent transform property, so :active's scale() on
+   `transform` cannot wipe it out. */
+.mob-toast__close:empty::before,
+.mob-alert__close:empty::before,
+.mob-banner__close:empty::before { rotate: 45deg; }
+.mob-toast__close:empty::after,
+.mob-alert__close:empty::after,
+.mob-banner__close:empty::after { rotate: -45deg; }
+
+.mob-toast__close:hover,
+.mob-alert__close:hover,
+.mob-banner__close:hover {
+  color: var(--mob-fg-secondary);
+  background: var(--mob-bg-hover);
+}
+.mob-toast__close:focus-visible,
+.mob-alert__close:focus-visible,
+.mob-banner__close:focus-visible {
+  outline: none;
+  box-shadow: var(--mob-feedback-ring);
+  border-radius: var(--mob-radius-xs);
+}
+.mob-toast__close:active,
+.mob-alert__close:active,
+.mob-banner__close:active { transform: scale(var(--mob-press-scale)); }
+.mob-toast__close:disabled,
+.mob-alert__close:disabled,
+.mob-banner__close:disabled {
+  color: var(--mob-fg-disabled);
+  background: none;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* =============================================================================
+   TOAST
+   Transient. Never the carrier for something the user must remember or act on
+   later — that is an alert or a banner.
+   ============================================================================= */
+.mob-toast-region {
+  position: fixed;
+  z-index: var(--mob-z-toast);
+  inset-block: auto var(--mob-toast-region-inset);
+  inset-inline: auto var(--mob-toast-region-inset);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-toast-region-gap);
+  inline-size: min(
+    var(--mob-toast-w),
+    calc(100vw - var(--mob-toast-region-inset) * 2)
+  );
+  /* The region is a hole: it must never eat clicks on the page beneath it. */
+  pointer-events: none;
+}
+.mob-toast-region > * { pointer-events: auto; }
+
+.mob-toast-region--top    { inset-block: var(--mob-toast-region-inset) auto; }
+.mob-toast-region--start  { inset-inline: var(--mob-toast-region-inset) auto; }
+/* Centring by symmetric insets + auto margin stays correct in both directions. */
+.mob-toast-region--center { inset-inline: 0; margin-inline: auto; }
+
+.mob-toast {
+  position: relative;
+  /* Clips the accent bar to the card radius. Safe for the focus ring because
+     the ring reaches 4px and the smallest padding here is 12px. */
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'icon title  close'
+    'icon body   body'
+    'icon action action';
+  align-items: start;
+  /* Gaps live on the parts, never on the grid. An empty track still gets its
+     gutters, so a title-only toast would carry a phantom column gap behind the
+     title and two phantom row gaps under it. Margins only exist where the part
+     does, so every subset of the anatomy measures correctly. */
+  column-gap: 0;
+  row-gap: 0;
+  padding: var(--mob-toast-pad-y) var(--mob-toast-pad-x);
+  padding-inline-start: calc(var(--mob-toast-pad-x) + var(--mob-toast-bar-w));
+  background: var(--mob-bg-elevated);
+  border: var(--mob-border-width) solid var(--mob-border-default);
+  border-radius: var(--mob-toast-radius);
+  /* The one place this system spends a shadow. A toast floats over unknown
+     content and needs separation a border cannot give it; cards still may not. */
+  box-shadow: var(--mob-shadow-md);
+  --mob-feedback-ring-bg: var(--mob-bg-elevated);
+  animation: mob-toast-in var(--mob-duration-enter) var(--mob-ease-enter) both;
+}
+.mob-toast::before {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--mob-toast-bar-w);
+  background: var(--mob-feedback-fg);
+}
+
+.mob-toast__icon  { grid-area: icon; margin-inline-end: var(--mob-toast-gap); }
+.mob-toast__close { grid-area: close; margin-inline-start: var(--mob-toast-gap); }
+
+.mob-toast__title {
+  grid-area: title;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-lg);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+.mob-toast__body {
+  grid-area: body;
+  min-inline-size: 0;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-md);
+  line-height: var(--mob-leading-normal);
+  letter-spacing: var(--mob-tracking-normal);
+  color: var(--mob-fg-muted);
+}
+.mob-toast__action { grid-area: action; justify-self: start; }
+
+/* Row spacing is conditional on what actually precedes the part, so a
+   title-only, body-only or title+action toast each measure exactly right. */
+.mob-toast:has(.mob-toast__title) .mob-toast__body,
+.mob-toast:has(.mob-toast__title) .mob-toast__action,
+.mob-toast:has(.mob-toast__body)  .mob-toast__action {
+  margin-block-start: var(--mob-space-4);
+}
+
+/* Exit. Height cannot be animated, so a leaving toast fades in place and the
+   stack closes when the node is removed — remove it after the animation ends. */
+.mob-toast[data-mob-leaving] {
+  animation: mob-toast-out var(--mob-duration-fast) var(--mob-ease-exit) forwards;
+  pointer-events: none;
+}
+
+@keyframes mob-toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(calc(var(--mob-feedback-dir) * var(--mob-toast-enter-x)));
+  }
+}
+@keyframes mob-toast-out {
+  to {
+    opacity: 0;
+    transform: translateX(calc(var(--mob-feedback-dir) * var(--mob-toast-enter-x)));
+  }
+}
+
+@media (max-width: 640px) {
+  .mob-toast-region {
+    inset-inline: var(--mob-gutter-mobile);
+    inline-size: auto;
+    margin-inline: 0;
+  }
+}
+
+/* =============================================================================
+   ALERT
+   The inline, persistent counterpart of a toast: it stays until the condition
+   that produced it is gone. Same four tones, same glyphs, tinted surface.
+   ============================================================================= */
+.mob-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    'icon title action close'
+    'icon body  action close';
+  align-items: start;
+  /* Same reason as the toast: gutters on the parts, so a body-only alert does
+     not inherit the spacing of the title it does not have. */
+  column-gap: 0;
+  row-gap: 0;
+  padding: var(--mob-alert-pad-y) var(--mob-alert-pad-x);
+  background: var(--mob-feedback-tint);
+  border: var(--mob-border-width) solid var(--mob-feedback-border);
+  border-radius: var(--mob-alert-radius);
+  color: var(--mob-fg-secondary);
+  --mob-feedback-ring-bg: var(--mob-feedback-tint);
+}
+.mob-alert__icon  { grid-area: icon; margin-inline-end: var(--mob-alert-gap); }
+.mob-alert__title {
+  grid-area: title;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-lg);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+.mob-alert__body {
+  grid-area: body;
+  min-inline-size: 0;
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-md);
+  line-height: var(--mob-leading-normal);
+  letter-spacing: var(--mob-tracking-normal);
+  color: var(--mob-fg-muted);
+}
+.mob-alert__action {
+  grid-area: action;
+  align-self: center;
+  justify-self: end;
+  margin-inline-start: var(--mob-alert-gap);
+}
+.mob-alert__close {
+  grid-area: close;
+  align-self: start;
+  margin-inline-start: var(--mob-space-6);
+}
+.mob-alert:has(.mob-alert__title) .mob-alert__body {
+  margin-block-start: var(--mob-space-3);
+}
+
+/* Long action labels, or a narrow column: drop the action under the body. */
+.mob-alert--stacked {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    'icon title  close'
+    'icon body   body'
+    'icon action action';
+}
+.mob-alert--stacked .mob-alert__action {
+  align-self: start;
+  justify-self: start;
+  margin-inline-start: 0;
+}
+.mob-alert--stacked:has(.mob-alert__title) .mob-alert__action,
+.mob-alert--stacked:has(.mob-alert__body)  .mob-alert__action {
+  margin-block-start: var(--mob-space-6);
+}
+.mob-alert--stacked .mob-alert__close { margin-inline-start: var(--mob-alert-gap); }
+
+/* =============================================================================
+   BANNER
+   Page-level, full-bleed. Sits above the page shell's gutter, not inside it, so
+   its own padding-inline reproduces the gutter.
+   ============================================================================= */
+.mob-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mob-banner-gap);
+  padding-block: var(--mob-banner-pad-y);
+  padding-inline: var(--mob-banner-pad-x);
+  background: var(--mob-feedback-tint);
+  border-block-end: var(--mob-border-width) solid var(--mob-feedback-border);
+  color: var(--mob-fg-secondary);
+  font-size: var(--mob-size-md);
+  line-height: var(--mob-leading-snug);
+  --mob-feedback-ring-bg: var(--mob-feedback-tint);
+}
+.mob-banner__text   { flex: 1 1 auto; min-inline-size: 0; }
+.mob-banner__action { flex: 0 0 auto; }
+.mob-banner__close  { margin-inline-start: var(--mob-space-2); }
+
+.mob-banner--sticky {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--mob-z-sticky);
+}
+
+@media (max-width: 767px) {
+  .mob-banner { padding-inline: var(--mob-gutter-mobile); }
+}
+
+/* =============================================================================
+   SKELETON
+   Layout-preserving. A skeleton must match the geometry of what replaces it —
+   if it does not, the page jumps and the skeleton was worse than nothing.
+   Mark every block aria-hidden and give the group one .mob-sr-only live region.
+   ============================================================================= */
+.mob-skeleton {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  inline-size: 100%;
+  background: var(--mob-skeleton-bg);
+  border-radius: var(--mob-skeleton-radius);
+}
+/* Transform-driven sheen: nothing about the block's box changes. reset.css
+   collapses this to a single instant pass under reduced motion, which leaves a
+   plain tile — the correct resting state. */
+.mob-skeleton::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--mob-skeleton-sheen),
+    transparent
+  );
+  transform: translateX(-100%);
+  animation: mob-skeleton-sweep var(--mob-skeleton-sweep-duration) linear infinite;
+}
+.mob-skeleton--text  { block-size: var(--mob-skeleton-text-h); }
+.mob-skeleton--title {
+  block-size: var(--mob-skeleton-title-h);
+  border-radius: var(--mob-radius-xs);
+}
+.mob-skeleton--circle {
+  inline-size: var(--mob-skeleton-circle);
+  block-size: var(--mob-skeleton-circle);
+  flex: 0 0 auto;
+  border-radius: var(--mob-radius-full);
+}
+.mob-skeleton--block {
+  block-size: var(--mob-skeleton-block-h);
+  border-radius: var(--mob-radius-lg);
+}
+
+/* Real paragraphs do not end flush. A run of text lines shortens its last one so
+   the placeholder reads as prose rather than as a stack of bars. The length is
+   inherited rather than re-selected: a row group turns the rule off by setting
+   the token to 100%, which cannot lose a specificity fight the way an override
+   selector would (:last-child:not(:only-child) outweighs a child combinator). */
+.mob-skeleton--text:last-child:not(:only-child) {
+  inline-size: var(--mob-skeleton-last, var(--mob-skeleton-text-last));
+}
+
+.mob-skeleton-group {
+  --mob-skeleton-last: var(--mob-skeleton-text-last);
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-skeleton-line-gap);
+}
+/* A row is an avatar beside a line, not a paragraph — its last child is a
+   first line. */
+.mob-skeleton-group--row {
+  --mob-skeleton-last: 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: var(--mob-space-10);
+}
+
+/* =============================================================================
+   SPINNER
+   currentColor throughout, so it takes the tone of whatever it sits inside.
+   Use for isolated async actions only; anything with a known shape gets a
+   skeleton instead.
+   ============================================================================= */
+.mob-spinner {
+  display: inline-block;
+  flex: 0 0 auto;
+  inline-size: var(--mob-spinner-size);
+  block-size: var(--mob-spinner-size);
+  border: var(--mob-spinner-stroke) solid var(--mob-spinner-track);
+  border-block-start-color: currentColor;
+  border-radius: var(--mob-radius-full);
+  animation: mob-spin var(--mob-spin-duration) linear infinite;
+}
+.mob-spinner--sm {
+  inline-size: var(--mob-spinner-size-sm);
+  block-size: var(--mob-spinner-size-sm);
+}
+.mob-spinner--md {
+  inline-size: var(--mob-spinner-size);
+  block-size: var(--mob-spinner-size);
+}
+.mob-spinner--lg {
+  inline-size: var(--mob-spinner-size-lg);
+  block-size: var(--mob-spinner-size-lg);
+  border-width: var(--mob-spinner-stroke-lg);
+}
+/* =============================================================================
+   PROGRESS
+   Determinate: set --mob-progress to a 0–1 number on .mob-progress.
+     <div class="mob-progress" style="--mob-progress:.42" role="progressbar"
+          aria-valuenow="42" aria-valuemin="0" aria-valuemax="100">
+       <div class="mob-progress__fill"></div>
+     </div>
+   The fill is full width and translated out of view, so the moving edge keeps
+   its true 3px cap instead of a scaleX-squashed one, and only `transform` is
+   ever animated.
+   ============================================================================= */
+@property --mob-progress {
+  syntax: '<number>';
+  inherits: true;
+  initial-value: 0;
+}
+
+.mob-progress {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  inline-size: 100%;
+  block-size: var(--mob-progress-h);
+  background: var(--mob-progress-track);
+  border-radius: var(--mob-progress-radius);
+}
+.mob-progress--lg { block-size: var(--mob-progress-h-lg); }
+
+/* Tone applies to the fill: a failed upload turns the bar negative without a
+   second set of classes. The tone contract is declared on toast/alert/banner,
+   never on .mob-progress, so an unrecognised tone value leaves
+   --mob-feedback-fg unresolved and the fill paints nothing. Fall back to the
+   accent — an unknown tone then reads exactly as an untoned bar. */
+.mob-progress[data-mob-tone] {
+  --mob-progress-fill: var(--mob-feedback-fg, var(--mob-accent));
+}
+.mob-progress[data-mob-tone='info']    { --mob-progress-fill: var(--mob-info); }
+.mob-progress[data-mob-tone='success'] { --mob-progress-fill: var(--mob-positive); }
+.mob-progress[data-mob-tone='warning'] { --mob-progress-fill: var(--mob-warning); }
+.mob-progress[data-mob-tone='error']   { --mob-progress-fill: var(--mob-negative); }
+
+.mob-progress__fill {
+  position: relative;
+  inline-size: 100%;
+  block-size: 100%;
+  background: var(--mob-progress-fill);
+  border-radius: inherit;
+  transform: translateX(
+    calc(var(--mob-feedback-dir) * (clamp(0, var(--mob-progress, 0), 1) - 1) * 100%)
+  );
+  transition: transform var(--mob-duration-slow) var(--mob-ease-standard);
+}
+
+/* Indeterminate: a dim full-width fill carries the "working" signal, and a
+   bright segment sweeps across it. Under reduced motion the sweep parks off the
+   end and the dim fill remains — still legibly "in progress". */
+.mob-progress--indeterminate .mob-progress__fill {
+  transform: none;
+  transition: none;
+  background: color-mix(in srgb, var(--mob-progress-fill) 28%, transparent);
+}
+.mob-progress--indeterminate .mob-progress__fill::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--mob-progress-indeterminate-w);
+  background: var(--mob-progress-fill);
+  border-radius: inherit;
+  animation: mob-progress-slide var(--mob-progress-duration)
+             var(--mob-ease-standard) infinite;
+}
+@keyframes mob-progress-slide {
+  from { transform: translateX(calc(var(--mob-feedback-dir) * -100%)); }
+  to   { transform: translateX(calc(var(--mob-feedback-dir) * 250%)); }
+}
+
+/* =============================================================================
+   EMPTY STATE
+   Absence, not failure. Dashed panel, no fill — it should read as a space
+   waiting to be filled rather than as another card.
+
+   The handoff's canonical instance [src]:
+     title  "No open positions"
+     sub    "Paste a token address to open your first ladder."
+     action ghost button "Paste address"
+   Keep copy at that length. One short title, one sentence, at most two actions.
+   ============================================================================= */
+.mob-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--mob-empty-gap);
+  padding: var(--mob-empty-pad-y) var(--mob-empty-pad-x);
+  border: var(--mob-border-width) dashed var(--mob-border-dashed);
+  border-radius: var(--mob-empty-radius);
+  text-align: center;
+}
+.mob-empty--sm {
+  --mob-empty-pad-y: var(--mob-empty-pad-y-sm);
+  --mob-empty-pad-x: var(--mob-empty-pad-x-sm);
+}
+/* Inside a fused segment the dashed edge would fight the frame's hairlines. */
+.mob-empty--bare { border: 0; }
+
+.mob-empty__visual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  inline-size: var(--mob-empty-visual);
+  block-size: var(--mob-empty-visual);
+  margin-block-end: var(--mob-space-4);
+  border-radius: var(--mob-radius-full);
+  background: var(--mob-bg-tile);
+  color: var(--mob-fg-dim);
+}
+.mob-empty__visual > svg {
+  inline-size: var(--mob-control-icon-lg);
+  block-size: var(--mob-control-icon-lg);
+}
+
+.mob-empty__title {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-lg);          /* [src] 13px / 600 */
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+/* [src] 10.5px in the handoff's mono default — this line is metadata-scale, not
+   body copy, so it stays mono while the toast/alert prose moves to sans. */
+.mob-empty__sub {
+  max-inline-size: var(--mob-empty-max-w);
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-normal);
+  color: var(--mob-fg-muted);
+  text-wrap: pretty;
+}
+/* Primary + secondary slot. Drop .mob-btn instances in; the handoff's own empty
+   state uses a single ghost button, so do not promote it to a filled primary
+   unless the action really is the page's main call. */
+.mob-empty__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--mob-space-8);
+  margin-block-start: var(--mob-space-14);
+}
+
+/* =============================================================================
+   ERROR STATE
+   Inline failure with a way out. Always pair the message with a retry — an
+   error the user cannot act on is a dead end.
+   ============================================================================= */
+.mob-error-state {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-error-gap);
+  color: var(--mob-negative);
+  font-size: var(--mob-size-xs);
+  line-height: var(--mob-leading-snug);
+  /* Feeds the shared action + icon rules above. */
+  --mob-feedback-fg: var(--mob-negative);
+  --mob-feedback-raised: var(--mob-negative-raised);
+  --mob-feedback-action: var(--mob-negative);
+}
+.mob-error-state__icon {
+  inline-size: var(--mob-error-icon);
+  block-size: var(--mob-error-icon);
+  font-size: var(--mob-size-3xs);
+}
+.mob-error-state__icon:empty::before { content: '!'; }
+.mob-error-state__message { min-inline-size: 0; }
+.mob-error-state__retry   { margin-inline-start: var(--mob-space-2); }
+
+/* Replacing a whole panel rather than annotating a field. */
+.mob-error-state--block {
+  flex-direction: column;
+  gap: var(--mob-space-6);
+  padding-block: var(--mob-space-24);
+  padding-inline: var(--mob-space-16);
+  text-align: center;
+}
+.mob-error-state--block .mob-error-state__retry { margin-inline-start: 0; }

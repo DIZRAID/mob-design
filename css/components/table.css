@@ -1,0 +1,655 @@
+/* =============================================================================
+   mob-design — table / data list
+   -----------------------------------------------------------------------------
+   Dense tabular data, tuned for scanning a column of numbers rather than for
+   reading prose. Mono + tabular-nums throughout, uppercase micro-label headers,
+   horizontal rules only.
+
+   ANATOMY
+   -------
+     .mob-table-scroll                        overflow:auto — data integrity first
+     └── <table class="mob-table">
+         ├── <caption>                        micro-label, optional
+         ├── <thead>
+         │   └── <tr>
+         │       ├── <th>                     uppercase micro-label, 34px band
+         │       └── <th class="mob-th--sortable" aria-sort="ascending">
+         │           └── <button>Label</button>       ▲   indicator drawn by the
+         │                                            ▼   th, pinned to its end edge
+         ├── <tbody>
+         │   ├── <tr data-mob-selected>       surface + start marker; outlives hover
+         │   │   ├── <td>                     ▏← 2px marker rides :first-child::after
+         │   │   ├── <td class="mob-td--num"> end-aligned, tabular, nowrap
+         │   │   └── <td class="mob-td--end">
+         │   │       └── <div class="mob-row-actions">   opacity reveal, never display
+         │   ├── <tr aria-disabled="true">    dimmed, no hover, actions withdrawn
+         │   ├── <tr data-mob-invalid>        failed row: negative tint + marker
+         │   └── <tr><td class="mob-table__empty"    colspan="N">
+         │            <td class="mob-table__loading" colspan="N">
+         │            <td class="mob-table__error"   colspan="N">
+         └── <tfoot>                          totals; rule above, no rule below
+
+   CONSUMER RULES
+   --------------
+   1. Markup is a real <table>. Cells may also carry .mob-th / .mob-td when the
+      grid is built from divs with ARIA roles; every selector here accepts both.
+   2. NO vertical dividers by default — that is what makes a dense table readable.
+      .mob-table--ruled is the opt-in when the data genuinely needs a grid.
+   3. Row state is native or data-*: :hover, :focus-visible, :active,
+      [data-mob-selected] / [aria-selected], [aria-disabled], [data-mob-invalid],
+      [aria-busy] on the table. There is no .is-* class in this file.
+   4. Numeric columns get .mob-td--num on the cell AND .mob-th--num on its header,
+      or the column head drifts off the digits it labels.
+   5. Row density follows [data-mob-density] — on the table, or on any ancestor
+      zone (see tokens.css). Control geometry does not change with density.
+   6. This table draws separators with real 1px borders, NOT with the system's
+      1px-gap-over-a-frame construction. That construction exists to fuse card
+      SEGMENTS seamlessly; table rows are not fused segments, and a gap-based
+      grid would fight border-collapse, sticky headers and colspan.
+   7. border-collapse is `separate`. Collapsed borders vanish underneath a sticky
+      thead and cannot be re-drawn without a shadow, so the table pays 0px of
+      border-spacing instead and keeps its rules.
+   8. Structural selectors are wrapped in :where() so specificity stays flat:
+      a modifier class always beats the structure it sits in.
+   ============================================================================= */
+
+/* Keyframes used here (mob-spin, mob-pulse, mob-skeleton-sweep) are defined once in
+   components/motion.css, which is the canonical home for the motion vocabulary. Import
+   it alongside this file, or via css/mob.css which orders both correctly. */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   Off-scale geometry lives here, never inline in a rule. The table is not in the
+   calibrated handoff, so values are [drv] unless noted.
+   -------------------------------------------------------------------------- */
+:root {
+  /* --- Geometry ---------------------------------------------------------- */
+  --mob-table-cell-px:       var(--mob-space-12);
+  --mob-table-cell-py:       var(--mob-space-10);
+  --mob-table-head-h:        var(--mob-header-row-h); /* [src] 34px header baseline —
+                                                         the table head lands on the
+                                                         same band as a column title */
+  --mob-table-min-w:         auto;   /* set to e.g. 720px to force scroll over squeeze */
+  --mob-table-scroll-max-h:  none;   /* set to give .mob-table-scroll its own y-scroll */
+  --mob-table-sticky-offset: 0px;    /* raise when a sticky app bar sits above */
+
+  /* --- Surfaces & rules --------------------------------------------------- */
+  --mob-table-head-bg:        transparent;              /* opaque only when sticky */
+  --mob-table-head-fg:        var(--mob-fg-label);
+  --mob-table-head-fg-active: var(--mob-fg-secondary);  /* hovered / sorted column */
+  --mob-table-head-rule:      var(--mob-border-default);
+  --mob-table-rule:           var(--mob-border-subtle);
+  --mob-table-rule-vertical:  var(--mob-border-subtle);
+
+  /* --- Rows --------------------------------------------------------------- */
+  --mob-table-row-fg:                var(--mob-fg-secondary);
+  --mob-table-row-bg-hover:          var(--mob-bg-hover);
+  --mob-table-row-bg-pressed:        var(--mob-bg-active);
+  --mob-table-row-bg-selected:       var(--mob-bg-selected);
+  /* Selected must stay legible while ALSO reacting to hover. bg-selected and
+     bg-active are the same value by design, so lift the hover state off the
+     selected surface instead of reaching for another background token. */
+  --mob-table-row-bg-selected-hover: color-mix(in srgb, var(--mob-bg-selected) 92%, var(--mob-fg-primary));
+  --mob-table-row-bg-invalid:        var(--mob-negative-tint);
+  --mob-table-row-bg-invalid-hover:  color-mix(in srgb, var(--mob-negative-tint) 90%, var(--mob-fg-primary));
+  --mob-table-row-fg-disabled:       var(--mob-fg-disabled);
+
+  /* Start-edge state marker. Colour is set per row; transparent means "no state",
+     so the pseudo-element can exist unconditionally and never needs a selector
+     that fights the stacked fallback for the same pseudo. */
+  --mob-table-marker:   transparent;
+  --mob-table-marker-w: 2px;
+
+  /* --- Row actions -------------------------------------------------------- */
+  /* 0 = fully hidden at rest. Raise to ~.5 for a product where users must be
+     told the actions exist before they hover. */
+  --mob-table-actions-rest-opacity: 0;
+
+  /* --- Sort indicator ----------------------------------------------------- */
+  --mob-table-sort-w:     7px;
+  --mob-table-sort-h:     4px;
+  --mob-table-sort-gap:   2px;                 /* between the two arrowheads */
+  --mob-table-sort-inset: var(--mob-space-6);  /* between label and indicator */
+  --mob-table-sort-rest-opacity:  .38;
+  --mob-table-sort-hover-opacity: .62;
+  --mob-table-sort-idle-opacity:  .28;         /* the arrow NOT currently in use */
+
+  /* --- Loading ------------------------------------------------------------ */
+  --mob-table-skeleton-h: 9px;    /* bar thickness; the cell's line strut, not this
+                                     value, sets the row height — see .mob-table__skeleton */
+  --mob-table-skeleton-w: 100%;
+  --mob-table-skeleton-cycle: calc(var(--mob-duration-enter) * 5); /* ~1.3s pulse */
+  --mob-table-busy-opacity: .48;
+
+  /* --- Full-width slots (empty / loading / error) ------------------------- */
+  --mob-table-slot-py: var(--mob-space-32);
+
+  /* --- Stacked fallback --------------------------------------------------- */
+  --mob-table-stacked-gap: var(--mob-space-8);
+}
+
+/* -----------------------------------------------------------------------------
+   DENSITY
+   The table reads the zone it sits in, or declares its own. The self-selector is
+   one class heavier than the ancestor one, so a table can always opt out of the
+   zone around it regardless of source order.
+   -------------------------------------------------------------------------- */
+:where([data-mob-density='marketing']) .mob-table,
+.mob-table[data-mob-density='marketing'] {
+  --mob-table-cell-py: var(--mob-space-14);
+  --mob-table-cell-px: var(--mob-space-16);
+}
+:where([data-mob-density='product']) .mob-table,
+.mob-table[data-mob-density='product'] {
+  --mob-table-cell-py: var(--mob-space-10);
+  --mob-table-cell-px: var(--mob-space-12);
+}
+:where([data-mob-density='data']) .mob-table,
+.mob-table[data-mob-density='data'] {
+  --mob-table-cell-py: var(--mob-space-6);
+  --mob-table-cell-px: var(--mob-space-10);
+}
+
+/* -----------------------------------------------------------------------------
+   SCROLL WRAPPER
+   Geometry only — no border, no background, no radius. The card or panel around
+   it owns the surface; this box owns the overflow.
+
+   Careful: `overflow-x: auto` computes overflow-y to `auto` as well, which makes
+   this element the scroll container for any sticky thead inside it. That is what
+   you want when the wrapper is height-capped (--mob-table-scroll-max-h). If you
+   want the head to stick to the PAGE, do not wrap the table here — let the page
+   scroll and set --mob-table-sticky-offset instead.
+   -------------------------------------------------------------------------- */
+.mob-table-scroll {
+  overflow: auto;
+  max-block-size: var(--mob-table-scroll-max-h);
+  overscroll-behavior-inline: contain; /* horizontal fling must not navigate back */
+}
+
+/* -----------------------------------------------------------------------------
+   TABLE
+   -------------------------------------------------------------------------- */
+.mob-table {
+  inline-size: 100%;
+  min-inline-size: var(--mob-table-min-w);
+  border-collapse: separate; /* see consumer rule 7 */
+  border-spacing: 0;
+  font-family: var(--mob-font-mono);
+  font-size: var(--mob-size-md);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-table-row-fg);
+  text-align: start;
+}
+
+/* Truncation opt-in. .mob-truncate in a cell does nothing under `auto` layout —
+   the column just grows. Fixed layout is the only thing that makes it bite. */
+.mob-table--fixed { table-layout: fixed; }
+
+.mob-table > :where(caption) {
+  padding-block-end: var(--mob-space-8);
+  padding-inline: var(--mob-table-cell-px);
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  text-transform: uppercase;
+  text-align: start;
+  color: var(--mob-fg-label);
+}
+
+/* -----------------------------------------------------------------------------
+   CELLS — the base every header, body and footer cell starts from
+   -------------------------------------------------------------------------- */
+.mob-table :is(th, td, .mob-th, .mob-td) {
+  padding-block: var(--mob-table-cell-py);
+  padding-inline: var(--mob-table-cell-px);
+  text-align: start;
+  vertical-align: middle;
+  border-block-end: var(--mob-border-width) solid var(--mob-table-rule);
+}
+
+/* The final body row's rule is dropped, not removed: keeping the border and
+   clearing only its colour holds the row exactly as tall as its siblings.
+   A tfoot supplies its own rule above itself, so this never doubles up. */
+.mob-table :where(tbody:last-of-type > tr:last-child) > :is(th, td, .mob-th, .mob-td) {
+  border-block-end-color: transparent;
+}
+
+/* --- Header cells ---------------------------------------------------------
+   The uppercase micro-label role from base.css, baked in rather than required
+   as a class: a column head that is not a micro-label is always a mistake, and
+   .mob-label on every <th> is noise the markup does not need to carry. */
+.mob-table :where(thead) :is(th, .mob-th) {
+  block-size: var(--mob-table-head-h); /* acts as a minimum in table layout */
+  font-size: var(--mob-size-3xs);
+  font-weight: var(--mob-weight-regular);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--mob-table-head-fg);
+  background-color: var(--mob-table-head-bg);
+  border-block-end: var(--mob-border-width) solid var(--mob-table-head-rule);
+}
+
+/* --- Row headers (<th scope="row">) — a cell, not a label. ---------------- */
+.mob-table :where(tbody) :is(th, .mob-th) {
+  font-weight: var(--mob-weight-regular);
+  color: var(--mob-fg-primary);
+}
+
+/* --- Footer / totals ----------------------------------------------------- */
+.mob-table :where(tfoot) :is(th, td, .mob-th, .mob-td) {
+  border-block-end: 0;
+  border-block-start: var(--mob-border-width) solid var(--mob-table-head-rule);
+  font-weight: var(--mob-weight-medium);
+  text-transform: none;
+  letter-spacing: var(--mob-tracking-normal);
+  color: var(--mob-fg-primary);
+}
+
+/* -----------------------------------------------------------------------------
+   ALIGNMENT MODIFIERS
+   Declared after the head/body cell rules so they win on either element. The
+   --td-- and --th-- spellings are the same rule; use the one that matches the
+   tag so the markup reads honestly.
+   -------------------------------------------------------------------------- */
+.mob-table :is(.mob-td--num, .mob-th--num) {
+  text-align: end;
+  white-space: nowrap;           /* a wrapped figure is an unreadable figure */
+  font-family: var(--mob-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.mob-table :is(.mob-td--end, .mob-th--end)       { text-align: end; }
+.mob-table :is(.mob-td--center, .mob-th--center) { text-align: center; }
+.mob-table :is(.mob-td--nowrap, .mob-th--nowrap) { white-space: nowrap; }
+
+/* -----------------------------------------------------------------------------
+   VERTICAL RULES  [opt-in]
+   Off by default: the spec calls out unnecessary vertical dividers as the thing
+   that turns a data table into an enterprise grid. Turn them on only when the
+   columns are genuinely independent (a matrix, a comparison).
+   -------------------------------------------------------------------------- */
+.mob-table--ruled :is(th, td, .mob-th, .mob-td):not(:last-child) {
+  border-inline-end: var(--mob-border-width) solid var(--mob-table-rule-vertical);
+}
+
+/* -----------------------------------------------------------------------------
+   STICKY HEAD
+   Needs an opaque head — rows scroll UNDER it, and a transparent head would let
+   them show through. Sticky positioning also requires border-collapse:separate,
+   which the base already sets.
+   -------------------------------------------------------------------------- */
+.mob-table--sticky-head {
+  --mob-table-head-bg: var(--mob-bg-surface);
+}
+/* Doubled class on purpose: this must outrank .mob-th--sortable's
+   `position: relative` below, or a sortable column stops sticking. Sticky is
+   itself a positioned box, so the sort indicator still anchors to the cell. */
+.mob-table.mob-table--sticky-head :where(thead) :is(th, .mob-th) {
+  position: sticky;
+  inset-block-start: var(--mob-table-sticky-offset);
+  z-index: var(--mob-z-raised);
+}
+
+/* -----------------------------------------------------------------------------
+   SORTABLE HEADERS
+   The indicator is drawn by the <th> and pinned to the cell's inline-end edge,
+   so it lines up down the header row whether the label is start- or end-aligned,
+   and whether or not the label is wrapped in a <button>.
+
+   Prefer <th aria-sort="…"><button>Label</button></th>: the button is the thing
+   that should be focusable and announced, and it inherits the header type role.
+   Every hover state here has a keyboard twin — the cell answers :focus-within
+   and the button answers :focus-visible.
+
+   Both arrowheads are always painted. Nothing appears, disappears or resizes
+   when the sort changes — only opacity and colour move.
+   -------------------------------------------------------------------------- */
+.mob-table .mob-th--sortable {
+  position: relative;
+  cursor: pointer;
+  user-select: none;
+  /* Reserve the indicator column up front so sorting never reflows the head. */
+  padding-inline-end: calc(
+    var(--mob-table-cell-px) + var(--mob-table-sort-w) + var(--mob-table-sort-inset)
+  );
+  transition: color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+.mob-table .mob-th--sortable > button {
+  display: block;
+  inline-size: 100%;
+  padding: 0;
+  text-align: inherit;
+  text-transform: inherit;
+  cursor: inherit;
+}
+
+.mob-table .mob-th--sortable::before,
+.mob-table .mob-th--sortable::after {
+  content: '';
+  position: absolute;
+  inset-inline-end: var(--mob-table-cell-px);
+  inline-size: var(--mob-table-sort-w);
+  block-size: var(--mob-table-sort-h);
+  background-color: currentColor; /* clip-path draws the shape; no icon font, no asset */
+  opacity: var(--mob-table-sort-rest-opacity);
+  pointer-events: none;           /* must not shadow the nested button */
+  transition:
+    opacity var(--mob-duration-fast) var(--mob-ease-standard),
+    background-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+.mob-table .mob-th--sortable::before {  /* ascending — points up */
+  inset-block-start: calc(50% - var(--mob-table-sort-h) - var(--mob-table-sort-gap) / 2);
+  clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+.mob-table .mob-th--sortable::after {   /* descending — points down */
+  inset-block-start: calc(50% + var(--mob-table-sort-gap) / 2);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
+}
+
+.mob-table .mob-th--sortable:hover { color: var(--mob-table-head-fg-active); }
+.mob-table .mob-th--sortable:hover::before,
+.mob-table .mob-th--sortable:hover::after { opacity: var(--mob-table-sort-hover-opacity); }
+
+/* Keyboard parity. The <button> is the focusable thing, so the CELL reacts via
+   :focus-within — otherwise a sort control lights up for a mouse and stays dead
+   for a keyboard. Placed with the hover rules, before the sorted block, so the
+   idle arrow still wins its lower opacity back below. */
+.mob-table .mob-th--sortable:focus-within { color: var(--mob-table-head-fg-active); }
+.mob-table .mob-th--sortable:focus-within::before,
+.mob-table .mob-th--sortable:focus-within::after { opacity: var(--mob-table-sort-hover-opacity); }
+
+/* And the button carries its own ring. The global one is refined, not deleted:
+   its inner band is painted in --mob-bg-canvas, which is the wrong surface over
+   an opaque sticky head, and a spreading box-shadow is clipped by
+   .mob-table-scroll's overflow. An outline is neither. */
+.mob-table .mob-th--sortable > button:focus-visible {
+  outline: var(--mob-border-width-strong) solid var(--mob-focus-color);
+  outline-offset: var(--mob-border-width);
+  box-shadow: none;
+  border-radius: var(--mob-radius-2xs);
+}
+
+/* Sorted. Direction is carried by the arrow shape and the head brightening, not
+   by colour alone — after these rules so hover cannot re-light the idle arrow. */
+.mob-table .mob-th--sortable:is([aria-sort='ascending'], [aria-sort='descending']) {
+  color: var(--mob-table-head-fg-active);
+}
+.mob-table .mob-th--sortable[aria-sort='ascending']::before,
+.mob-table .mob-th--sortable[aria-sort='descending']::after {
+  background-color: var(--mob-accent-bright);
+  opacity: 1;
+}
+.mob-table .mob-th--sortable[aria-sort='ascending']::after,
+.mob-table .mob-th--sortable[aria-sort='descending']::before {
+  opacity: var(--mob-table-sort-idle-opacity);
+}
+
+/* -----------------------------------------------------------------------------
+   ROWS
+   -------------------------------------------------------------------------- */
+.mob-table :where(tbody) tr {
+  background-color: transparent;
+  transition: background-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+/* State marker. Painted on every first cell but transparent until a row sets
+   --mob-table-marker, which keeps the selector flat and leaves ::before free for
+   the stacked fallback's data-label. */
+.mob-table :where(tbody) tr > :first-child { position: relative; }
+.mob-table :where(tbody) tr > :first-child::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  inline-size: var(--mob-table-marker-w);
+  background-color: var(--mob-table-marker);
+  transition: background-color var(--mob-duration-fast) var(--mob-ease-standard);
+}
+
+/* Hover. Excludes disabled rows in the selector rather than relying on source
+   order, so a later edit to this file cannot silently re-enable it. */
+.mob-table :where(tbody) tr:not([aria-disabled='true']):hover {
+  background-color: var(--mob-table-row-bg-hover);
+}
+
+/* Interactive rows — on the whole table, or per row for a mixed list. */
+.mob-table[data-mob-interactive] :where(tbody) tr:not([aria-disabled='true']),
+.mob-table :where(tbody) tr[data-mob-interactive]:not([aria-disabled='true']) {
+  cursor: pointer;
+}
+/* Pressed. A row is not a control chip: scaling a <tr> breaks the column grid
+   and is unreliable in table layout, so the press reads as a darker surface —
+   the same direction the press-scale token expresses on buttons. */
+.mob-table[data-mob-interactive] :where(tbody) tr:not([aria-disabled='true']):active,
+.mob-table :where(tbody) tr[data-mob-interactive]:not([aria-disabled='true']):active {
+  background-color: var(--mob-table-row-bg-pressed);
+}
+
+/* Focus. The global :focus-visible ring is a box-shadow, and a table-row box
+   does not paint one — so rows and cells get an inset outline instead. This
+   refines the ring; it does not delete it. */
+.mob-table :where(tbody) tr:focus-visible {
+  outline: var(--mob-border-width-strong) solid var(--mob-focus-color);
+  outline-offset: calc(var(--mob-border-width-strong) * -1);
+  box-shadow: none;
+}
+.mob-table :is(th, td, .mob-th, .mob-td):focus-visible {
+  outline: var(--mob-border-width-strong) solid var(--mob-focus-color);
+  outline-offset: calc(var(--mob-border-width-strong) * -1);
+  box-shadow: none;
+  border-radius: 0; /* a cell is square; base.css rounds the generic ring */
+}
+
+/* Selected — carries a surface AND a start marker, so it survives hover, keeps
+   reading as selected while a neighbour is hovered, and is not colour-only. */
+.mob-table :where(tbody) tr:is([data-mob-selected], [aria-selected='true']) {
+  --mob-table-marker: var(--mob-accent);
+  background-color: var(--mob-table-row-bg-selected);
+  color: var(--mob-fg-primary);
+}
+.mob-table :where(tbody) tr:is([data-mob-selected], [aria-selected='true']):not([aria-disabled='true']):hover {
+  background-color: var(--mob-table-row-bg-selected-hover);
+}
+
+/* Error — a row whose write failed. Tint plus marker plus the consumer's own
+   message; never colour alone. */
+.mob-table :where(tbody) tr[data-mob-invalid] {
+  --mob-table-marker: var(--mob-negative);
+  background-color: var(--mob-table-row-bg-invalid);
+}
+.mob-table :where(tbody) tr[data-mob-invalid]:not([aria-disabled='true']):hover {
+  background-color: var(--mob-table-row-bg-invalid-hover);
+}
+
+/* Disabled — contrast down AND affordance gone: no hover surface, no marker, no
+   pointer, no reachable actions. It must not be mistakable for a quiet row. */
+.mob-table :where(tbody) tr[aria-disabled='true'] {
+  --mob-table-marker: transparent;
+  background-color: transparent;
+  cursor: default;
+}
+.mob-table :where(tbody) tr[aria-disabled='true'] :is(th, td, .mob-th, .mob-td) {
+  color: var(--mob-table-row-fg-disabled);
+}
+/* visibility:hidden, not display:none — the cell keeps its width so the column
+   does not jump, and the buttons leave the tab order along with the pixels.
+   Mark them disabled in the markup too; this is presentation, not enforcement. */
+.mob-table :where(tbody) tr[aria-disabled='true'] .mob-row-actions {
+  visibility: hidden;
+}
+
+/* -----------------------------------------------------------------------------
+   ROW ACTIONS
+   Revealed by hover, but ALWAYS reachable by keyboard: opacity only, never
+   display or visibility, or the focused button vanishes mid-tab and focus is
+   lost. The reveal is also gated on (hover: hover) — where there is no hover to
+   trigger it the actions simply stay visible, rather than becoming an invisible
+   tap target. Any device that cannot answer the query fails to "visible", which
+   is the safe direction.
+   -------------------------------------------------------------------------- */
+.mob-row-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--mob-control-gap);
+  vertical-align: middle;
+}
+
+@media (hover: hover) {
+  .mob-table :where(tbody) tr .mob-row-actions {
+    opacity: var(--mob-table-actions-rest-opacity);
+    transition: opacity var(--mob-duration-fast) var(--mob-ease-standard);
+  }
+  .mob-table :where(tbody) tr:hover .mob-row-actions,
+  .mob-table :where(tbody) tr:focus-within .mob-row-actions,
+  .mob-table :where(tbody) tr:is([data-mob-selected], [aria-selected='true']) .mob-row-actions {
+    opacity: 1;
+  }
+}
+
+/* -----------------------------------------------------------------------------
+   LOADING
+   Two shapes, and neither one resizes anything:
+
+     a) first load  — real <tr>/<td> rows holding .mob-table__skeleton bars, so
+                      the skeleton inherits the exact column geometry;
+     b) refresh     — aria-busy on the table: the rows stay put and dim in place.
+   -------------------------------------------------------------------------- */
+.mob-table__skeleton {
+  /* inline-block on purpose: the cell's line strut still sets the row height, so
+     a skeleton row is exactly as tall as the text row that replaces it. It also
+     inherits the cell's text-align, so a bar in a .mob-td--num cell ends where
+     the digits will. */
+  display: inline-block;
+  vertical-align: middle;
+  inline-size: var(--mob-table-skeleton-w);
+  max-inline-size: 100%;
+  block-size: var(--mob-table-skeleton-h);
+  border-radius: var(--mob-radius-2xs);
+  background-color: var(--mob-bg-tile); /* [src] #141518 — the handoff skeleton block */
+  animation: mob-pulse var(--mob-table-skeleton-cycle) var(--mob-ease-standard) infinite alternate;
+}
+.mob-table[aria-busy='true'] {
+  cursor: progress;
+}
+.mob-table[aria-busy='true'] :where(tbody) {
+  opacity: var(--mob-table-busy-opacity);
+  pointer-events: none;
+  transition: opacity var(--mob-duration-normal) var(--mob-ease-standard);
+}
+
+/* -----------------------------------------------------------------------------
+   FULL-WIDTH SLOTS
+   One <td colspan="N"> standing in for the whole body. Compose the real content
+   inside (an empty-state block, a retry button); these rules only shape the row.
+   -------------------------------------------------------------------------- */
+.mob-table :is(.mob-table__empty, .mob-table__loading, .mob-table__error) {
+  padding-block: var(--mob-table-slot-py);
+  text-align: center;
+  vertical-align: middle;
+  border-block-end: 0;
+  font-size: var(--mob-size-md);
+}
+.mob-table .mob-table__empty   { color: var(--mob-fg-muted); }
+.mob-table .mob-table__loading { color: var(--mob-fg-label); cursor: progress; }
+/* Colour is the accent here, not the message — the slot must contain words that
+   say what failed and an action that retries. */
+.mob-table .mob-table__error   { color: var(--mob-negative); }
+
+/* -----------------------------------------------------------------------------
+   STACKED FALLBACK  [opt-in]
+   Below the md breakpoint each row becomes a card and every cell prints its
+   column name from data-label.
+
+   Stack only when the hierarchy survives the conversion — when a row is a small
+   set of independent facts about one entity. A row that is a series to be
+   COMPARED against the rows above and below it loses its whole point once the
+   column disappears; wrap that table in .mob-table-scroll and let it scroll.
+
+   Two consequences to design around:
+     - display:block strips table semantics from the accessibility tree. The
+       printed data-label is what carries the column name; add explicit
+       role="table"/"row"/"cell" if the semantics must survive.
+     - <thead> is removed, and with it any sortable controls. Provide sorting and
+       filtering outside the table on small screens.
+   -------------------------------------------------------------------------- */
+@media (max-width: 767px) {
+  .mob-table--stacked,
+  .mob-table--stacked > :where(tbody),
+  .mob-table--stacked > :where(tbody) > tr {
+    display: block;
+  }
+
+  /* Removed rather than visually hidden: a sr-only thead leaves the sort buttons
+     focusable but invisible, which is worse than losing them. */
+  .mob-table--stacked > :where(thead) { display: none; }
+
+  .mob-table--stacked > :where(tbody) > tr {
+    position: relative;
+    overflow: hidden; /* clips the state marker to the card radius */
+    padding-block: var(--mob-table-cell-py);
+    padding-inline: var(--mob-card-pad-x);
+    background-color: var(--mob-bg-surface);
+    border: var(--mob-border-width) solid var(--mob-border-default);
+    border-radius: var(--mob-card-radius);
+  }
+  .mob-table--stacked > :where(tbody) > tr + tr {
+    margin-block-start: var(--mob-table-stacked-gap);
+  }
+
+  /* The marker moves from the first cell to the card itself. */
+  .mob-table--stacked > :where(tbody) > tr > :first-child::after { content: none; }
+  .mob-table--stacked > :where(tbody) > tr::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: var(--mob-table-marker-w);
+    background-color: var(--mob-table-marker);
+  }
+
+  .mob-table--stacked > :where(tbody) > tr > :is(th, td, .mob-th, .mob-td) {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--mob-space-12);
+    padding-inline: 0;
+    padding-block: var(--mob-space-6);
+    text-align: end;
+    white-space: normal;
+    border-block-end: var(--mob-border-width) solid var(--mob-table-rule);
+  }
+  .mob-table--stacked > :where(tbody) > tr > :last-child { border-block-end: 0; }
+
+  /* The first cell is the card's title, not a labelled field. */
+  .mob-table--stacked > :where(tbody) > tr > :first-child {
+    justify-content: flex-start;
+    text-align: start;
+    font-size: var(--mob-size-lg);
+    color: var(--mob-fg-primary);
+  }
+
+  .mob-table--stacked > :where(tbody) > tr > :is(th, td, .mob-th, .mob-td)[data-label]::before {
+    content: attr(data-label);
+    flex: none;
+    margin-inline-end: auto;
+    font-size: var(--mob-size-3xs);
+    letter-spacing: var(--mob-tracking-label);
+    line-height: var(--mob-leading-snug);
+    text-transform: uppercase;
+    text-align: start;
+    color: var(--mob-fg-label);
+  }
+
+  /* A card is not a row: its actions are part of it and are always visible.
+     Doubled class to outrank the hover-reveal rule, which carries an extra
+     type selector. */
+  .mob-table.mob-table--stacked :where(tbody) tr .mob-row-actions { opacity: 1; }
+
+  .mob-table--stacked :is(.mob-table__empty, .mob-table__loading, .mob-table__error) {
+    display: block;
+  }
+}

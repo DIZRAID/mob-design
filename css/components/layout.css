@@ -1,0 +1,673 @@
+/* =============================================================================
+   mob-design — layout
+   -----------------------------------------------------------------------------
+   The page shell and every layout primitive the product composes with.
+
+   Nothing in this file is interactive, so nothing here ships hover / pressed /
+   disabled states — the states matrix in the spec applies to controls, not to
+   containers. What this file does own is the geometry everything else inherits:
+   the page gutters, the two-column shell, the column baseline, the section
+   rhythm and the 12/8/4 grid.
+
+   ANATOMY — the calibrated dashboard shell
+   ----------------------------------------
+     .mob-page                          canvas + 22px / 26px / 36px gutters
+     └── .mob-shell                     max 1460px, centred, row, gap 20
+         ├── .mob-rail                  288px fixed column, gap 14
+         │   ├── .mob-column-header     34px baseline row
+         │   └── …cards
+         └── .mob-main                  flex:1 1 0 + min-inline-size:0
+             ├── .mob-column-header     34px baseline row
+             └── …cards
+
+     .mob-column-header
+     ┌──────────────────────────────────────────────────────────────┐
+     │ __title  __chip   __spacer ─────────────►  __meta  __actions │ 34px
+     └──────────────────────────────────────────────────────────────┘
+
+   RULES FOR CONSUMERS
+   -------------------
+   1. Every column that stacks cards must carry `--mob-column-gap` set to its own
+      `gap`. .mob-rail, .mob-main and .mob-stack already do. This is the contract
+      .mob-column-header reads to keep both columns on one baseline — see the
+      BASELINE DEVICE note below. A hand-rolled column that skips it will still
+      look right (the header falls back to a plain 11px margin), it just will not
+      stay aligned with a rail beside it.
+   2. Put `min-inline-size: 0` on anything you build that holds dense content in
+      a flex row. .mob-main, .mob-col and grid children get it for free.
+   3. Never set a fixed height on a layout block. Heights come from content; the
+      one exception is the header row, and it is a *min*-height.
+   4. Breakpoint literals appear in this file only inside @media preludes, which
+      cannot read custom properties. They mirror --mob-bp-* exactly and are
+      written as `<bp> - 0.02px` so a viewport sitting precisely on a breakpoint
+      resolves to the larger layout.
+   ============================================================================= */
+
+/* -----------------------------------------------------------------------------
+   COMPONENT TOKENS
+   Calibrated, off-scale geometry lives here so no rule below inlines a number.
+
+   Four custom properties in this file are deliberately NOT declared at :root,
+   because they are per-element knobs rather than system values:
+     --mob-column-gap   set by a column primitive to its own gap; read by
+                        .mob-column-header. Undeclared so `var(…, 0px)` can fall
+                        back for containers that do not use gap at all.
+     --mob-grid-cols    set by .mob-grid--2/--3/--4.
+     --mob-col-span     set by .mob-col--1 … --12.
+     --mob-divider-color  set by .mob-divider tone modifiers.
+   -------------------------------------------------------------------------- */
+:root {
+  /* Page gutters. 22 / 26 / 36 is measured, asymmetric on purpose: the shell
+     opens tight under the viewport edge and leaves room to breathe at the end
+     of a scroll. Only the inline value maps onto the public gutter scale.      */
+  --mob-page-pad-block-start: 22px;                      /* [src] */
+  --mob-page-pad-block-end:   36px;                      /* [src] */
+  --mob-page-pad-inline:      var(--mob-gutter-desktop); /* [src] 26px */
+
+  --mob-shell-max: var(--mob-container-app);             /* [src] 1460px */
+  --mob-shell-gap: var(--mob-space-20);                  /* [src] */
+
+  --mob-rail-w:   var(--mob-rail-width);                 /* [src] 288px */
+  --mob-rail-gap: var(--mob-card-gap);                   /* [src] 14px  */
+
+  /* Column baseline. The row is 34px tall and is followed by exactly 11px of
+     space before the first card, in BOTH columns, whatever each column's own
+     gap happens to be. 34 + 11 = 45px to the first card edge.                  */
+  --mob-column-header-h:     var(--mob-header-row-h);    /* [src] 34px */
+  --mob-column-header-gap:   11px;                       /* [src] */
+  /* The prototype's two header rows use 9px and 11px between title and chip.
+     Same row, same job, two values — normalised to one so repetition stays
+     exact (spec §2.5 / §21 "random 1px differences").                          */
+  --mob-column-header-gap-x: var(--mob-space-10);        /* [drv] */
+
+  --mob-cluster-gap: var(--mob-space-10);                /* [src] asset row */
+
+  /* Auto-fit floor. Below this a track stops being a readable card.            */
+  --mob-grid-min:   240px;                               /* [drv] */
+  --mob-cols-count: 12;                                  /* [drv] desktop grid */
+
+  /* Section rhythm: eyebrow → heading → support → content → action.            */
+  --mob-section-head-gap:      var(--mob-space-10);      /* [drv] inside head  */
+  --mob-section-head-space:    var(--mob-space-24);      /* [drv] head→content */
+  --mob-section-actions-space: var(--mob-space-24);      /* [drv] content→cta  */
+
+  /* Sticky offsets mirror the page gutters so a pinned element keeps the same
+     breathing room it had at rest.                                             */
+  --mob-sticky-top:    var(--mob-page-pad-block-start);  /* [drv] */
+  --mob-sticky-bottom: var(--mob-space-16);              /* [drv] */
+}
+
+/* Density zones move rhythm only — never gutters, never column geometry. An app
+   shell is the same shell in all three zones; only the air inside sections
+   changes. (Extends the zone block in tokens.css with this file's tokens.)     */
+[data-mob-density='marketing'] {
+  --mob-section-head-gap:      var(--mob-space-12);
+  --mob-section-head-space:    var(--mob-space-40);
+  --mob-section-actions-space: var(--mob-space-40);
+  --mob-grid-min:              280px;
+}
+[data-mob-density='data'] {
+  --mob-section-head-gap:      var(--mob-space-6);
+  --mob-section-head-space:    var(--mob-space-12);
+  --mob-section-actions-space: var(--mob-space-12);
+  --mob-grid-min:              200px;
+}
+
+/* Responsive token shifts. Everything below is a gutter or a column count — no
+   component ever changes shape here, only the frame around it.                 */
+@media (max-width: 1023.98px) {          /* --mob-bp-lg */
+  :root {
+    --mob-page-pad-inline: var(--mob-gutter-tablet);
+    --mob-cols-count: 8;
+  }
+}
+@media (max-width: 767.98px) {           /* --mob-bp-md */
+  :root { --mob-cols-count: 4; }
+}
+@media (max-width: 639.98px) {           /* --mob-bp-sm */
+  :root {
+    --mob-page-pad-inline:      var(--mob-gutter-mobile);
+    --mob-page-pad-block-start: var(--mob-space-16);
+    --mob-page-pad-block-end:   var(--mob-space-24);
+  }
+}
+
+/* =============================================================================
+   PAGE
+   The outermost block. Paints the canvas itself rather than relying on <body>,
+   so a shell rendered into an iframe, a portal or a storybook frame still sits
+   on the right ground.
+   ============================================================================= */
+.mob-page {
+  min-block-size: 100dvh;
+  background: var(--mob-bg-canvas);
+  color: var(--mob-fg-primary);
+  padding-block: var(--mob-page-pad-block-start) var(--mob-page-pad-block-end);
+  padding-inline: var(--mob-page-pad-inline);
+}
+
+/* Full-bleed page: sections manage their own gutters (hero images, sticky bars
+   that must touch the viewport edge). Vertical rhythm is kept. */
+.mob-page--flush { padding-inline: 0; }
+
+/* =============================================================================
+   SHELL
+   The max-width container. One block, three widths — app (dense product),
+   content (marketing) and prose (editorial measure).
+   ============================================================================= */
+.mob-shell {
+  max-inline-size: var(--mob-shell-max);
+  margin-inline: auto;
+  display: flex;
+  gap: var(--mob-shell-gap);
+  /* flex-start, not stretch: columns are independent stacks and must not be
+     stretched to the height of the tallest one. It is also what lets a rail go
+     position:sticky without first being forced to full column height.          */
+  align-items: flex-start;
+}
+.mob-shell--content { --mob-shell-max: var(--mob-container-content); }
+
+/* Prose is a reading measure, not a column system — it flows as a block. */
+.mob-shell--prose {
+  --mob-shell-max: var(--mob-container-prose);
+  display: block;
+}
+
+/* Single-column shell for marketing and settings pages. */
+.mob-shell--stack {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+/* Below lg the two-column shell becomes one column. The rail keeps its DOM
+   order, so a rail authored before main stacks above it and one authored after
+   stacks below — the same order a keyboard user tabs through. */
+@media (max-width: 1023.98px) {          /* --mob-bp-lg */
+  .mob-shell {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* =============================================================================
+   RAIL — the fixed side column
+   ============================================================================= */
+.mob-rail {
+  /* Contract read by .mob-column-header. Keep it equal to `gap` below. */
+  --mob-column-gap: var(--mob-rail-gap);
+
+  flex: 0 0 auto;
+  inline-size: var(--mob-rail-w);
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-column-gap);
+}
+
+/* A TRAILING RAIL IS AUTHORED IN THE DOM, NOT WITH `order`.
+   There is deliberately no .mob-rail--end here. docs/06-accessibility.md is
+   categorical: "Never use `order:` or `grid-area` to visually reorder
+   interactive content — the tab order will not follow", and 03-patterns.md
+   repeats it ("Rail first in the DOM … no `order` property, so keyboard and
+   screen-reader order stay correct"). A rail is full of interactive cards, so
+   `order` on it is exactly the banned case: DOM order would stay sensible while
+   the tab sequence stopped matching what the user sees — WCAG 2.4.3.
+
+   To put the rail on the trailing side, write it after .mob-main:
+
+       <div class="mob-shell">
+         <main class="mob-main">…</main>
+         <aside class="mob-rail">…</aside>
+       </div>
+
+   Every axis then agrees for free — visual order, tab order, the stacked order
+   below lg, and the mirrored position under RTL. */
+
+/* Pins the rail while the main column scrolls. Requires that no ancestor
+   between here and the scroll container has overflow other than visible. */
+.mob-rail--sticky {
+  position: sticky;
+  inset-block-start: var(--mob-sticky-top);
+  z-index: var(--mob-z-raised);
+}
+
+@media (max-width: 1023.98px) {          /* --mob-bp-lg */
+  .mob-rail {
+    inline-size: 100%;
+    flex: 0 0 auto;
+  }
+  /* A full-width rail has nothing to stick beside. */
+  .mob-rail--sticky {
+    position: static;
+    z-index: auto;
+  }
+}
+
+/* =============================================================================
+   MAIN — the flexible column
+   ============================================================================= */
+.mob-main {
+  --mob-column-gap: var(--mob-card-gap);
+
+  flex: 1 1 0;
+  /* THE load-bearing declaration. A flex item's automatic minimum size is its
+     content's min-content size, so one unbreakable child — a wide table, a long
+     hash, a fused position card — would otherwise push this column past its
+     share and blow the rail off the row. Logical form of the handoff's
+     `min-width: 0`. */
+  min-inline-size: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-column-gap);
+}
+
+/* =============================================================================
+   COLUMN HEADER — the baseline device
+   -----------------------------------------------------------------------------
+   Both columns open with a header row so the first card in each column starts on
+   the same horizontal line. The handoff achieves it with two hand-tuned numbers:
+   the rail header carries margin-bottom:-3px and gets +14px from the rail gap
+   (net 11px), while the main header carries margin-bottom:11px inside a column
+   with no gap. Same 45px baseline, two magic numbers that silently break the
+   moment someone edits the rail gap.
+
+   This is the same result expressed as one rule: the header always leaves
+   --mob-column-header-gap (11px) of clear space, and when it sits directly
+   inside a gapped column it subtracts that column's own gap, which the column
+   published as --mob-column-gap.
+
+       rail:  34 + (11 − 14) + 14 = 45px
+       main:  34 + (11 − 14) + 14 = 45px
+       any other container (no gap declared):  34 + 11 = 45px
+
+   Change --mob-card-gap and both columns stay aligned. That is the difference
+   between reproducing the measurement and reproducing the intent.
+   ============================================================================= */
+.mob-column-header {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-column-header-gap-x);
+  min-block-size: var(--mob-column-header-h);
+  margin-block-end: var(--mob-column-header-gap);
+}
+
+/* Direct children only: a header nested deeper (inside a card, say) inherits
+   --mob-column-gap but must not compensate for a gap it does not sit in. */
+.mob-rail > .mob-column-header,
+.mob-main > .mob-column-header,
+.mob-stack > .mob-column-header {
+  margin-block-end: calc(var(--mob-column-header-gap) - var(--mob-column-gap, 0px));
+}
+
+/* Layout properties keep normal specificity… */
+.mob-column-header__title {
+  min-inline-size: 0;
+  flex: 0 1 auto;
+}
+/* …the type role is declared at zero specificity so any base.css type class
+   (.mob-title, .mob-heading-sm, …) placed on the same element wins. Values are
+   the .mob-title role, restated through the same tokens so the two cannot
+   drift apart. */
+:where(.mob-column-header__title) {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-xl);
+  font-weight: var(--mob-weight-semibold);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+
+/* Placement slot for a chip. Deliberately does not style the chip — chip.css
+   owns its surface, border and padding. */
+.mob-column-header__chip {
+  display: inline-flex;
+  align-items: center;
+  flex: 0 1 auto;
+  min-inline-size: 0;
+}
+
+.mob-column-header__spacer {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+/* Right-hand metadata ("updated 3s ago"). */
+.mob-column-header__meta { flex: 0 0 auto; }
+:where(.mob-column-header__meta) {
+  font-size: var(--mob-size-xs);
+  color: var(--mob-fg-label);
+  line-height: var(--mob-leading-snug);
+}
+
+.mob-column-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--mob-control-gap);
+  flex: 0 0 auto;
+  /* Pushes the group right even when no __spacer was authored. */
+  margin-inline-start: auto;
+}
+
+/* Narrow viewports: the row wraps rather than crushing the title. The baseline
+   device is only meaningful while two columns sit side by side, and below lg
+   they no longer do — so growing past 34px here costs nothing. */
+@media (max-width: 639.98px) {           /* --mob-bp-sm */
+  .mob-column-header {
+    flex-wrap: wrap;
+    row-gap: var(--mob-space-8);
+  }
+  .mob-column-header__spacer { display: none; }
+}
+
+/* =============================================================================
+   STACK — vertical rhythm
+   ============================================================================= */
+.mob-stack {
+  --mob-column-gap: var(--mob-stack-gap);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-column-gap);
+  min-inline-size: 0;
+}
+.mob-stack--tight { --mob-column-gap: var(--mob-space-8); }
+.mob-stack--loose { --mob-column-gap: var(--mob-space-24); }
+.mob-stack--center { align-items: center; }
+/* Children keep their natural width instead of filling the column. */
+.mob-stack--start { align-items: flex-start; }
+
+/* =============================================================================
+   CLUSTER — horizontal rhythm that wraps
+   The counterpart to stack: anything laid out in a row that must survive a
+   narrow container by wrapping rather than overflowing.
+   ============================================================================= */
+.mob-cluster {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mob-cluster-gap);
+  min-inline-size: 0;
+}
+.mob-cluster--tight   { --mob-cluster-gap: var(--mob-space-6); }
+.mob-cluster--loose   { --mob-cluster-gap: var(--mob-space-16); }
+.mob-cluster--between { justify-content: space-between; }
+.mob-cluster--end     { justify-content: flex-end; }
+/* Label on the left, meta on the right, sitting on one text baseline — the
+   card-header pattern from the handoff. */
+.mob-cluster--baseline { align-items: baseline; }
+.mob-cluster--nowrap   { flex-wrap: nowrap; }
+
+/* =============================================================================
+   GRID
+   ============================================================================= */
+.mob-grid {
+  display: grid;
+  gap: var(--mob-grid-gap);
+  /* min(…, 100%) is the guard: without it a track floor wider than the
+     container makes the grid overflow instead of dropping to one column. */
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--mob-grid-min), 100%), 1fr));
+}
+
+/* auto-fill keeps empty tracks — use it when items must stay aligned to a rhythm
+   across rows with different item counts. */
+.mob-grid--fill {
+  grid-template-columns: repeat(auto-fill, minmax(min(var(--mob-grid-min), 100%), 1fr));
+}
+
+/* Explicit column counts. minmax(0, 1fr) rather than 1fr for the same reason
+   .mob-main gets min-inline-size: 0 — a 1fr track's floor is its content's
+   min-content size, so one dense child would widen its column. */
+.mob-grid--2,
+.mob-grid--3,
+.mob-grid--4 {
+  grid-template-columns: repeat(var(--mob-grid-cols), minmax(0, 1fr));
+}
+.mob-grid--2 { --mob-grid-cols: 2; }
+.mob-grid--3 { --mob-grid-cols: 3; }
+.mob-grid--4 { --mob-grid-cols: 4; }
+
+/* Any grid child, whether or not it carries a class of its own. */
+.mob-grid > * { min-inline-size: 0; }
+
+@media (max-width: 1023.98px) {          /* --mob-bp-lg */
+  .mob-grid--3,
+  .mob-grid--4 { --mob-grid-cols: 2; }
+}
+@media (max-width: 639.98px) {           /* --mob-bp-sm */
+  .mob-grid--2,
+  .mob-grid--3,
+  .mob-grid--4 { --mob-grid-cols: 1; }
+}
+
+/* =============================================================================
+   COLUMN GRID — 12 / 8 / 4
+   The spec's grid: 12 columns on desktop, 8 on tablet, 4 on mobile, one gutter
+   throughout. Use it for page composition; use .mob-grid for card fields.
+
+     <div class="mob-cols">
+       <div class="mob-col mob-col--8">…</div>
+       <div class="mob-col mob-col--4">…</div>
+     </div>
+
+   Spans are clamped at each breakpoint rather than allowed to overflow into
+   implicit tracks: a --12 becomes 8 on tablet and 4 on mobile, so a layout
+   authored for desktop never produces a horizontal scrollbar.
+   ============================================================================= */
+.mob-cols {
+  display: grid;
+  gap: var(--mob-grid-gap);
+  grid-template-columns: repeat(var(--mob-cols-count), minmax(0, 1fr));
+}
+.mob-cols > * { min-inline-size: 0; }
+
+.mob-col {
+  grid-column: span var(--mob-col-span, 1);
+  min-inline-size: 0;
+}
+.mob-col--1  { --mob-col-span: 1;  }
+.mob-col--2  { --mob-col-span: 2;  }
+.mob-col--3  { --mob-col-span: 3;  }
+.mob-col--4  { --mob-col-span: 4;  }
+.mob-col--5  { --mob-col-span: 5;  }
+.mob-col--6  { --mob-col-span: 6;  }
+.mob-col--7  { --mob-col-span: 7;  }
+.mob-col--8  { --mob-col-span: 8;  }
+.mob-col--9  { --mob-col-span: 9;  }
+.mob-col--10 { --mob-col-span: 10; }
+.mob-col--11 { --mob-col-span: 11; }
+.mob-col--12 { --mob-col-span: 12; }
+/* Full width whatever the current column count is. */
+.mob-col--full { grid-column: 1 / -1; }
+
+@media (max-width: 1023.98px) {          /* --mob-bp-lg — 8 columns */
+  .mob-col--9,
+  .mob-col--10,
+  .mob-col--11,
+  .mob-col--12 { --mob-col-span: 8; }
+}
+@media (max-width: 767.98px) {           /* --mob-bp-md — 4 columns */
+  .mob-col--5,
+  .mob-col--6,
+  .mob-col--7,
+  .mob-col--8,
+  .mob-col--9,
+  .mob-col--10,
+  .mob-col--11,
+  .mob-col--12 { --mob-col-span: 4; }
+}
+
+/* =============================================================================
+   SECTION
+   Section rhythm from the spec: eyebrow / heading / support / content / action.
+   Spacing states the boundary; a divider is only added when spacing alone is not
+   enough.
+
+     <section class="mob-section">
+       <header class="mob-section__head">
+         <p  class="mob-section__eyebrow">Positions</p>
+         <h2 class="mob-section__heading">Open ladders</h2>
+         <p  class="mob-section__support">…</p>
+       </header>
+       …content…
+       <div class="mob-section__actions">…</div>
+     </section>
+   ============================================================================= */
+.mob-section { margin-block-end: var(--mob-section-gap); }
+/* The last section must not push the page's bottom gutter down. */
+.mob-section:last-child { margin-block-end: 0; }
+
+.mob-section__head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mob-section-head-gap);
+  margin-block-end: var(--mob-section-head-space);
+  min-inline-size: 0;
+}
+
+/* Heading left, controls right — the common product-page header. */
+.mob-section__head--split {
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--mob-space-16);
+  flex-wrap: wrap;
+}
+
+/* Type roles below are declared at zero specificity: they are sensible defaults
+   for the slot, and any base.css type class on the same element overrides them
+   without an !important or a longer selector. */
+:where(.mob-section__eyebrow) {
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+  text-transform: uppercase;
+}
+:where(.mob-section__heading) {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-4xl);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+:where(.mob-section__support) {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-lg);
+  line-height: var(--mob-leading-relaxed);
+  color: var(--mob-fg-secondary);
+}
+/* Measure control: support copy never runs wider than a comfortable line. */
+.mob-section__support {
+  max-inline-size: var(--mob-container-prose);
+  text-wrap: pretty;
+}
+
+.mob-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--mob-control-gap);
+  margin-block-start: var(--mob-section-actions-space);
+}
+
+/* Centred marketing section. Long paragraphs stay left-aligned by policy
+   (spec §21) — only the head is centred, and the measure is kept. */
+.mob-section--center { text-align: center; }
+.mob-section--center .mob-section__head { align-items: center; }
+.mob-section--center .mob-section__support { margin-inline: auto; }
+.mob-section--center .mob-section__actions { justify-content: center; }
+
+@media (max-width: 639.98px) {           /* --mob-bp-sm */
+  .mob-section__head--split {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* =============================================================================
+   DIVIDER
+   A hairline, painted as a background rather than a border so the same block
+   works as <hr>, <div> or a flex/grid child, and so the horizontal and vertical
+   forms are one component instead of two.
+
+   Tone follows the border hierarchy in tokens.css:
+     horizontal  --mob-border-subtle  a rule inside one surface
+     vertical    --mob-border-frame   a seam between two content columns, the
+                                      same value the fused card uses for its
+                                      1px gaps
+   ============================================================================= */
+.mob-divider {
+  --mob-divider-color: var(--mob-border-subtle);
+
+  border: 0;
+  margin: 0;
+  flex: 0 0 auto;
+  inline-size: 100%;
+  block-size: var(--mob-border-width);
+  background: var(--mob-divider-color);
+}
+
+.mob-divider--vertical {
+  --mob-divider-color: var(--mob-border-frame);
+
+  inline-size: var(--mob-border-width);
+  block-size: auto;
+  /* Stretch to the full height of the row it divides, in flex and in grid. */
+  align-self: stretch;
+  min-block-size: var(--mob-space-16);
+}
+
+.mob-divider--subtle { --mob-divider-color: var(--mob-border-subtle); }
+.mob-divider--frame  { --mob-divider-color: var(--mob-border-frame); }
+.mob-divider--strong { --mob-divider-color: var(--mob-border-default); }
+
+/* Runs edge to edge inside a padded card by cancelling the card's own inline
+   padding. Reads the card token, so it tracks the card it lives in. */
+.mob-divider--bleed {
+  inline-size: auto;
+  margin-inline: calc(-1 * var(--mob-card-pad-x));
+}
+
+/* =============================================================================
+   SPACER
+   A flexible gap for the one case gap cannot express: pushing siblings apart
+   inside a single flex line. Works in both axes — it grows along whichever one
+   its parent flows in. Fixed-size spacers are not provided on purpose; fixed
+   space is `gap` or a margin token, not an element.
+   ============================================================================= */
+.mob-spacer {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 0;
+  /* Never a hit target, never read aloud. */
+  pointer-events: none;
+}
+
+/* =============================================================================
+   STICKY
+   Pins a block inside its scroll container. Transparent by default; add
+   --canvas when the pinned block must occlude content scrolling under it,
+   which is almost always the case for a header.
+   ============================================================================= */
+.mob-sticky {
+  position: sticky;
+  inset-block-start: var(--mob-sticky-top);
+  z-index: var(--mob-z-sticky);
+}
+
+.mob-sticky--bottom {
+  inset-block-start: auto;
+  inset-block-end: var(--mob-sticky-bottom);
+}
+
+/* Paints the canvas and extends it over the page gutter, so content scrolling
+   underneath disappears at the true page edge rather than at the block edge. */
+.mob-sticky--canvas {
+  background: var(--mob-bg-canvas);
+  margin-inline: calc(-1 * var(--mob-page-pad-inline));
+  padding-inline: var(--mob-page-pad-inline);
+}
+
+/* A pinned header sits on the canvas with no border of its own; add the seam
+   only when it must separate from scrolled content. */
+.mob-sticky--seam { border-block-end: var(--mob-border-width) solid var(--mob-border-default); }

@@ -1,0 +1,334 @@
+/* =============================================================================
+   mob-design — utilities
+   -----------------------------------------------------------------------------
+   WHY THIS FILE EXISTS, AND WHY IT IS SHORT
+
+   This is not a utility framework and must never grow into one. Every class
+   below satisfies one test:
+
+       it maps 1:1 onto a value that is already a token, and its absence would
+       force somebody to type that value as a literal.
+
+   `.mob-gap-14` exists because 14px is --mob-space-14, and because without it a
+   rail stack gets `gap: 14px` typed into a component file — which is the exact
+   drift the token layer was built to stop. `.mob-gap-15` does not exist,
+   because 15px is not on the public scale; if a surface genuinely needs it, it
+   is calibrated geometry and belongs in that component's own token block.
+
+   The three groups here are the three places a one-off literal actually shows
+   up in practice: flex/grid arrangement, spacing between siblings, and the
+   surface + border + radius of a plain box.
+
+   WHAT DOES NOT BELONG HERE
+     · No colour utilities. Tone is semantic — base.css owns .mob-tone-* and
+       [data-mob-sign], and a colour applied for any other reason is a bug.
+     · No type utilities. base.css owns the roles; a size picked off a scale
+       instead of a role is how a design system loses its voice.
+     · No arbitrary-value escape hatch, no responsive variant of every class, no
+       state variants. If a rule needs a breakpoint or a state, it is a
+       component, not a utility.
+     · No !important, anywhere. mob.css loads this file last precisely so that a
+       utility outranks a component rule of equal specificity on source order
+       alone. Reaching for !important here would break that contract for
+       everyone downstream.
+
+   CASCADE ORDER INSIDE THIS FILE IS LOAD-BEARING
+   ----------------------------------------------
+   Utilities collide by design — .mob-grid-auto sets `gap`, and .mob-gap-8 also
+   sets `gap`; .mob-flex sets `display`, and .mob-hide-md also sets `display`.
+   They all sit at specificity (0,1,0), so the LATER rule wins. The file is
+   therefore ordered narrowest-intent-last:
+
+       1. arrangement   flex / grid / alignment
+       2. spacing       gap, then margin        (overrides an arrangement gap)
+       3. surface       background / border / radius
+       4. visibility    responsive display      (overrides an arrangement display)
+       5. overflow      scroll affordance
+
+   Do not reorder the sections.
+
+   A NOTE ON `-mt-` / `-mb-`
+   -------------------------
+   The names read as top and bottom, but the properties are `margin-block-start`
+   and `margin-block-end`. In a horizontal writing mode those are the same
+   thing; in a vertical one the logical version is the correct one and the
+   physical one is wrong. The short name is kept because it is what people type;
+   the implementation is logical because that is what is right.
+   ============================================================================= */
+
+/* =============================================================================
+   1 — ARRANGEMENT
+   -----------------------------------------------------------------------------
+   Alignment uses the writing-mode-relative keywords `start` / `end` rather than
+   `flex-start` / `flex-end`. Two reasons: they mean the same thing in flex and
+   in grid, so one class works on both, and they follow `direction`, so a row
+   aligned to `start` aligns to the right in an RTL document without a second
+   rule.
+   ============================================================================= */
+.mob-flex        { display: flex; }
+.mob-inline-flex { display: inline-flex; }
+
+/* Column direction. NOT named .mob-col — layout.css already owns that name for
+   a 12-grid column span (.mob-col--1 … --12), and shadowing it would silently
+   break every grid child in the product. */
+.mob-flex-col { flex-direction: column; }
+
+.mob-wrap { flex-wrap: wrap; }
+
+/* Grow to fill, shrink to nothing, ignore intrinsic width. Deliberately does
+   NOT set min-inline-size: 0 — see .mob-min-w-0 below and layout.css consumer
+   rule 2. Keeping them separate means the flex-blowout fix stays a decision the
+   author makes on purpose rather than a side effect they never learn about. */
+.mob-flex-1 { flex: 1 1 0; }
+
+/* The flex/grid blowout fix. A flex or grid child's min-size defaults to `auto`,
+   which is its CONTENT size — so one long address or one wide table pushes the
+   whole row past its container instead of shrinking. Every dense surface in this
+   system needs this somewhere. */
+.mob-min-w-0 { min-inline-size: 0; }
+
+.mob-items-start    { align-items: start; }
+.mob-items-center   { align-items: center; }
+.mob-items-end      { align-items: end; }
+.mob-items-stretch  { align-items: stretch; }
+/* Baseline is the one that matters for this system's numbers: a 27px hero
+   figure and the 10px label beside it only look deliberate when they sit on the
+   same baseline, not when their boxes are centred. */
+.mob-items-baseline { align-items: baseline; }
+
+.mob-justify-start   { justify-content: start; }
+.mob-justify-center  { justify-content: center; }
+.mob-justify-end     { justify-content: end; }
+.mob-justify-between { justify-content: space-between; }
+
+/* Auto-fitting grid. The utility form of layout.css's .mob-grid--fill, reading
+   the identical tokens so the two can never resolve to different columns.
+   Use .mob-grid + .mob-grid--fill for a real section; use this for an ad-hoc
+   row of cards inside something else.
+
+   min() guards the single-column case: below --mob-grid-min the track would
+   otherwise be wider than the container and overflow it. */
+.mob-grid-auto {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fit,
+    minmax(min(var(--mob-grid-min, 240px), 100%), 1fr)
+  );
+  gap: var(--mob-grid-gap);
+}
+/* Same blowout guard as .mob-grid in layout.css, applied for free here because
+   a grid child that overflows its track is never what the author meant. */
+.mob-grid-auto > * { min-inline-size: 0; }
+
+/* =============================================================================
+   2 — SPACING
+   -----------------------------------------------------------------------------
+   Keyed ONLY to --mob-space-*. There is no .mob-gap-5 because there is no
+   --mob-space-5. That is the point of the file: if the class does not exist,
+   the value does not exist, and the conversation moves to the token layer where
+   it belongs.
+
+   `gap` covers flex, grid and multi-column, and it collapses correctly at the
+   ends of a wrapped row — which is why this system spaces siblings with gap and
+   not with margins. The margin utilities below are for the one case gap cannot
+   reach: separating a block from what precedes or follows it in a flow its
+   parent does not control.
+   ============================================================================= */
+.mob-gap-2  { gap: var(--mob-space-2);  }
+.mob-gap-3  { gap: var(--mob-space-3);  }
+.mob-gap-4  { gap: var(--mob-space-4);  }
+.mob-gap-6  { gap: var(--mob-space-6);  }
+.mob-gap-8  { gap: var(--mob-space-8);  }
+.mob-gap-10 { gap: var(--mob-space-10); }
+.mob-gap-12 { gap: var(--mob-space-12); }
+.mob-gap-14 { gap: var(--mob-space-14); }
+.mob-gap-16 { gap: var(--mob-space-16); }
+.mob-gap-20 { gap: var(--mob-space-20); }
+.mob-gap-24 { gap: var(--mob-space-24); }
+.mob-gap-32 { gap: var(--mob-space-32); }
+
+.mob-mt-2  { margin-block-start: var(--mob-space-2);  }
+.mob-mt-3  { margin-block-start: var(--mob-space-3);  }
+.mob-mt-4  { margin-block-start: var(--mob-space-4);  }
+.mob-mt-6  { margin-block-start: var(--mob-space-6);  }
+.mob-mt-8  { margin-block-start: var(--mob-space-8);  }
+.mob-mt-10 { margin-block-start: var(--mob-space-10); }
+.mob-mt-12 { margin-block-start: var(--mob-space-12); }
+.mob-mt-14 { margin-block-start: var(--mob-space-14); }
+.mob-mt-16 { margin-block-start: var(--mob-space-16); }
+.mob-mt-20 { margin-block-start: var(--mob-space-20); }
+.mob-mt-24 { margin-block-start: var(--mob-space-24); }
+.mob-mt-32 { margin-block-start: var(--mob-space-32); }
+
+.mob-mb-2  { margin-block-end: var(--mob-space-2);  }
+.mob-mb-3  { margin-block-end: var(--mob-space-3);  }
+.mob-mb-4  { margin-block-end: var(--mob-space-4);  }
+.mob-mb-6  { margin-block-end: var(--mob-space-6);  }
+.mob-mb-8  { margin-block-end: var(--mob-space-8);  }
+.mob-mb-10 { margin-block-end: var(--mob-space-10); }
+.mob-mb-12 { margin-block-end: var(--mob-space-12); }
+.mob-mb-14 { margin-block-end: var(--mob-space-14); }
+.mob-mb-16 { margin-block-end: var(--mob-space-16); }
+.mob-mb-20 { margin-block-end: var(--mob-space-20); }
+.mob-mb-24 { margin-block-end: var(--mob-space-24); }
+.mob-mb-32 { margin-block-end: var(--mob-space-32); }
+
+/* =============================================================================
+   3 — SURFACE
+   -----------------------------------------------------------------------------
+   Background, border and radius are three separate decisions here, not one
+   preset, because that is how the signature construction works: a segmented
+   card is a --mob-bg-frame parent with a border and a radius, holding children
+   that have a background and neither of the other two.
+
+   These paint only. They set no padding — padding is calibrated per component
+   (--mob-card-pad-*), and a utility that guessed at it would put a 16px card
+   and a 15px card next to each other. Use .mob-card when you want a card.
+   ============================================================================= */
+
+/* The four elevation steps from the token layer, in the three forms a plain box
+   actually needs. There is no .mob-canvas utility: the canvas is the page, and
+   painting it onto a box inside the page is how you get a hole. */
+.mob-surface        { background-color: var(--mob-bg-surface); }
+.mob-surface-raised { background-color: var(--mob-bg-surface-raised); }
+.mob-sunken         { background-color: var(--mob-bg-sunken); }
+
+/* The card boundary: 1px, --mob-border-default. This is the only border weight
+   the system draws around a surface — depth comes from surface + 1px border,
+   never from a shadow. */
+.mob-bordered {
+  border: var(--mob-border-width) solid var(--mob-border-default);
+}
+
+/* Single rules for dividing content INSIDE one surface. --mob-border-subtle is
+   the in-card hairline (the handoff's #17191d), one step quieter than the card
+   boundary so a divider never competes with the card edge.
+
+   Logical, so they stay top and bottom in a vertical writing mode too. Note
+   these are the block axis only: a vertical seam between fused segments is a
+   1px gap over --mob-bg-frame, not a border — see .mob-segmented in card.css. */
+.mob-hairline-top {
+  border-block-start: var(--mob-border-width) solid var(--mob-border-subtle);
+}
+.mob-hairline-bottom {
+  border-block-end: var(--mob-border-width) solid var(--mob-border-subtle);
+}
+
+/* Radius tracks the size of the thing, not taste: 6 for a chip, 8/9/10 for the
+   three control steps, 12 for a card or panel. --full is for avatars, dots and
+   status marks — not for buttons. "Everything in a pill" is on the spec's
+   anti-pattern list (§21). */
+.mob-rounded-xs   { border-radius: var(--mob-radius-xs);   }
+.mob-rounded-sm   { border-radius: var(--mob-radius-sm);   }
+.mob-rounded-md   { border-radius: var(--mob-radius-md);   }
+.mob-rounded-lg   { border-radius: var(--mob-radius-lg);   }
+.mob-rounded-xl   { border-radius: var(--mob-radius-xl);   }
+.mob-rounded-full { border-radius: var(--mob-radius-full); }
+
+/* =============================================================================
+   4 — RESPONSIVE VISIBILITY
+   -----------------------------------------------------------------------------
+       .mob-hide-sm   gone below 640px   (--mob-bp-sm)
+       .mob-hide-md   gone below 768px   (--mob-bp-md)
+       .mob-show-sm   ONLY below 640px
+
+   Read the suffix as "on small screens" in all three: -sm hides on small, -md
+   hides on small and tablet, show-sm shows only on small. They are a matched
+   pair — .mob-hide-sm and .mob-show-sm swap at exactly the same pixel.
+
+   Each rule only ever ADDS `display: none` inside a media query; none of them
+   ever sets display back to a value. That is deliberate. `display: revert` or a
+   hardcoded `block` would destroy the element's own display — a .mob-btn is
+   inline-flex, a .mob-grid is grid — and the bug would only appear at one
+   viewport width, which is the worst place to hide one. Outside its media
+   query a visibility utility contributes nothing at all.
+
+   Breakpoint literals appear here because a media prelude cannot read a custom
+   property. They mirror --mob-bp-* exactly, written as `<bp> - 0.02px` so a
+   viewport sitting precisely on a breakpoint resolves to the larger layout —
+   the same convention layout.css uses.
+
+   These hide visually AND from assistive technology, because `display: none`
+   removes the element from the accessibility tree. That is correct for a
+   duplicate of something else on the page; it is wrong for content that only
+   exists here. If the content is unique, reflow it — do not hide it.
+   ============================================================================= */
+@media (max-width: 639.98px) {           /* --mob-bp-sm */
+  .mob-hide-sm { display: none; }
+}
+
+@media (max-width: 767.98px) {           /* --mob-bp-md */
+  .mob-hide-md { display: none; }
+}
+
+@media (min-width: 640px) {              /* --mob-bp-sm */
+  .mob-show-sm { display: none; }
+}
+
+/* =============================================================================
+   5 — HORIZONTAL SCROLL
+   -----------------------------------------------------------------------------
+   The affordance tables and tab rows share. Geometry only — no background, no
+   border, no radius: the card or panel around it owns the surface, this box
+   owns the overflow.
+
+   Data integrity over squeezing. When a dense row will not fit, the right
+   answer in this system is to let it scroll, not to crush a column of numbers
+   until the digits wrap.
+   ============================================================================= */
+.mob-scroll-x {
+  /* Only overflow-x is declared. Setting overflow-y as well would be wrong
+     twice over: a non-visible overflow-x already forces overflow-y to compute
+     to `auto`, and writing `hidden` there would clip the 4px focus ring off any
+     control inside without buying anything. */
+  overflow-x: auto;
+  /* A horizontal fling inside this box must not become a browser back-swipe. */
+  overscroll-behavior-inline: contain;
+}
+
+/* Edge fade. Opt-in, because a permanent mask on content that does NOT overflow
+   fades the ends of a row nobody can scroll — which looks like a rendering bug.
+   Add it when the row is known to overflow (a tab strip on a phone, a wide
+   table in a narrow column), or toggle it from a resize observer.
+
+   The mask is symmetric, so it is RTL-safe without a second rule. Only the
+   ALPHA of the opaque stop is read; a token supplies it so no literal colour
+   appears in this file. The scrollbar is hidden because a visible one crossing
+   under the fade reads as broken chrome — the fade is the affordance. */
+.mob-scroll-x--fade {
+  scroll-behavior: smooth;
+  /* Keeps a keyboard-focused child clear of the fade when it scrolls into view. */
+  scroll-padding-inline: var(--mob-space-24);
+  scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    var(--mob-fg-primary) var(--mob-space-24),
+    var(--mob-fg-primary) calc(100% - var(--mob-space-24)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    var(--mob-fg-primary) var(--mob-space-24),
+    var(--mob-fg-primary) calc(100% - var(--mob-space-24)),
+    transparent 100%
+  );
+}
+.mob-scroll-x--fade::-webkit-scrollbar { display: none; }
+
+/* A scroll container is keyboard-focusable in its own right — that is how a
+   keyboard user scrolls a wide table that holds no focusable cell — so it picks
+   up base.css's :focus-visible ring. On THIS variant that ring is invisible:
+   `mask-image` clips to the border box (mask-clip defaults to border-box), and
+   --mob-focus-ring is drawn entirely OUTSIDE it, so the mask erases the whole
+   indicator. The plain .mob-scroll-x has no mask and keeps the outer ring.
+
+   Restated inset, using the token the system already ships for exactly this case
+   (chip.css and card.css use it where an outer ring would be clipped). Inset
+   costs no layout, so the box does not change size, and it survives the mask.
+   Its inline ends still fade with the gradient; its block runs cross the full
+   width, which is what makes the indicator readable. */
+.mob-scroll-x--fade:focus-visible {
+  box-shadow: var(--mob-focus-ring-inset);
+}

@@ -1,0 +1,4 @@
+{
+  "//": "Scope override, not a second package. The root package.json declares \"type\": \"module\", which would make preset.js ESM and break `require('mob-design/tailwind/preset.js')` from a CommonJS tailwind.config.js. Tailwind presets are loaded with require(), so this directory opts back into CommonJS. Do not add fields here.",
+  "type": "commonjs"
+}

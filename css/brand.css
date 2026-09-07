@@ -1,0 +1,51 @@
+/* =============================================================================
+   mob-design — one-hex rebrand  [optional]
+   -----------------------------------------------------------------------------
+   Load AFTER tokens.css. Set --mob-brand once; the accent family, tint and glow
+   are derived from it in oklab so the relationships that make the default violet
+   work are preserved at any hue.
+
+       :root { --mob-brand: #e05c2b; }
+
+   The derivation is a good approximation, not a substitute for judgement. If the
+   result reads wrong at your hue, override the individual --mob-accent-* tokens;
+   that is a supported outcome, not a failure.
+   ============================================================================= */
+:root {
+  --mob-brand: var(--mob-violet-500);
+}
+
+:root {
+  --mob-accent:         var(--mob-brand);
+  --mob-accent-hover:   color-mix(in oklab, var(--mob-brand) 86%, var(--mob-gray-000));
+  --mob-accent-pressed: color-mix(in oklab, var(--mob-brand) 88%, var(--mob-gray-1000));
+  --mob-accent-deep:    color-mix(in oklab, var(--mob-brand) 78%, var(--mob-gray-1000));
+  --mob-accent-soft:    color-mix(in oklab, var(--mob-brand) 92%, var(--mob-accent-bright));
+  --mob-accent-bright:  color-mix(in oklab, var(--mob-brand) 52%, var(--mob-gray-000));
+  --mob-accent-glow:    color-mix(in oklab, var(--mob-brand) 72%, var(--mob-gray-000));
+  --mob-accent-tint:        color-mix(in oklab, var(--mob-brand) 14%, var(--mob-bg-canvas));
+  --mob-accent-tint-strong: color-mix(in oklab, var(--mob-brand) 24%, var(--mob-bg-canvas));
+}
+
+/* ---------------------------------------------------------------------------
+   TONE RECIPE
+   The calibrated affirm/destroy triplets in tokens.css are measured values and
+   stay canonical. When you need the same muted treatment for a NEW semantic
+   (warning actions, an info action), build it with this recipe rather than
+   picking three colours by eye:
+
+     --tone-fg:     color-mix(in oklab, <hue> 62%, var(--mob-fg-secondary));
+     --tone-bg:     color-mix(in oklab, <hue> 11%, var(--mob-bg-canvas));
+     --tone-border: color-mix(in oklab, <hue> 20%, var(--mob-border-frame));
+
+   Hover adds roughly +14% hue to fg and border, +4% to bg. The point is that
+   intent reads at rest and saturation is spent only on hover.
+   ------------------------------------------------------------------------- */
+:root {
+  --mob-warn-fg:     color-mix(in oklab, var(--mob-warning) 62%, var(--mob-fg-secondary));
+  --mob-warn-bg:     color-mix(in oklab, var(--mob-warning) 11%, var(--mob-bg-canvas));
+  --mob-warn-border: color-mix(in oklab, var(--mob-warning) 20%, var(--mob-border-frame));
+  --mob-warn-fg-hover:     color-mix(in oklab, var(--mob-warning) 76%, var(--mob-fg-secondary));
+  --mob-warn-bg-hover:     color-mix(in oklab, var(--mob-warning) 15%, var(--mob-bg-canvas));
+  --mob-warn-border-hover: color-mix(in oklab, var(--mob-warning) 34%, var(--mob-border-frame));
+}
