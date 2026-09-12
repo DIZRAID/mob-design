@@ -262,7 +262,7 @@
 }
 .mob-input-wrap > .mob-input,
 .mob-input-wrap > .mob-select {
-  block-size: auto; /* stretched by the wrap; browsers centre the line for us */
+  block-size: auto; /* stretched by the wrap; enhanced select alignment is explicit below */
 }
 
 /* --- Control chrome -------------------------------------------------------- */
@@ -456,6 +456,15 @@
     .mob-select:not([multiple]):not([size]),
     .mob-select:not([multiple]):not([size])::picker(select) {
       appearance: base-select;
+    }
+
+    /* base-select exposes the trigger as a flex box, but its initial cross-axis
+       alignment is normal in Chromium. Centre the selected label explicitly so
+       every field size keeps the same geometry as the surrounding wrap. */
+    .mob-select:not([multiple]):not([size]) {
+      align-items: center;
+      justify-content: flex-start;
+      text-align: start;
     }
 
     /* .mob-input-wrap already paints the chevron. Do not hide the wrap's

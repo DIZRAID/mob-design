@@ -128,6 +128,42 @@ try {
     }
   });
 
+  const triggerSizes = await selectPage.locator('#timezone').evaluate((select) => {
+    const field = select.closest('.mob-field');
+    const wrap = select.closest('.mob-input-wrap');
+    const originalClass = field.className;
+    const results = ['sm', 'md', 'lg'].map((size) => {
+      field.className = `mob-field mob-field--${size}`;
+      const style = getComputedStyle(select);
+      const selectBox = select.getBoundingClientRect();
+      const wrapBox = wrap.getBoundingClientRect();
+      return {
+        size,
+        display: style.display,
+        alignItems: style.alignItems,
+        justifyContent: style.justifyContent,
+        textAlign: style.textAlign,
+        height: selectBox.height,
+        wrapHeight: wrapBox.height,
+        topDelta: selectBox.top - wrapBox.top,
+        bottomDelta: selectBox.bottom - wrapBox.bottom,
+        wrapBorderTop: Number.parseFloat(getComputedStyle(wrap).borderTopWidth),
+        wrapBorderBottom: Number.parseFloat(getComputedStyle(wrap).borderBottomWidth),
+      };
+    });
+    field.className = originalClass;
+    return results;
+  });
+  for (const trigger of triggerSizes) {
+    assert.equal(trigger.display, 'flex', `${trigger.size} customizable select remains a flex trigger`);
+    assert.equal(trigger.alignItems, 'center', `${trigger.size} selected label is vertically centered`);
+    assert.equal(trigger.justifyContent, 'flex-start', `${trigger.size} selected label starts at the inline edge`);
+    assert.equal(trigger.textAlign, 'start');
+    assert.ok(trigger.height > 0 && Math.abs(trigger.height - (trigger.wrapHeight - trigger.wrapBorderTop - trigger.wrapBorderBottom)) < 0.5, `${trigger.size} trigger fills the field content box: ${JSON.stringify(trigger)}`);
+    assert.ok(Math.abs(trigger.topDelta - trigger.wrapBorderTop) < 0.5 && Math.abs(trigger.bottomDelta + trigger.wrapBorderBottom) < 0.5, `${trigger.size} trigger stays aligned inside the field border: ${JSON.stringify(trigger)}`);
+  }
+  assert.ok(triggerSizes[0].height < triggerSizes[1].height && triggerSizes[1].height < triggerSizes[2].height, 'select size tokens produce increasing trigger heights');
+
   let darkPickerBackground;
   for (const id of ['theme', 'density', 'timezone']) {
     assert.equal(await selectPage.locator(`#${id}`).evaluate((select) => getComputedStyle(select, '::picker(select)').display), 'none');
