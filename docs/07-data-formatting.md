@@ -5,17 +5,20 @@ therefore not an appendix to the design — it is the part of the design the use
 A column of numbers that jitters, rounds inconsistently, or renders "unknown" the same way it
 renders "zero" is a broken component, no matter how correct its padding is.
 
-Everything below is a product-wide contract. It is implemented **once**, in one module
-(§13), and imported everywhere. A number formatted at the call site is a bug: two call sites
-always drift.
+Everything below is a worked visual policy, not a command to replace an existing product's
+domain precision, locale, rounding or arbitrary-precision math. If the host already has those
+contracts, preserve them and map their output to the visual roles here. For a new product, choose
+one policy, implement it **once** in one module (§13), and import it everywhere; formatting at
+individual call sites will drift.
 
 ---
 
 ## 1. Tabular numerals
 
-`base.css` sets `font-variant-numeric: tabular-nums` on `body`, so it inherits everywhere by
-default. `.mob-nums` re-asserts it for anything that escapes inheritance (a canvas label, an
-SVG `<text>`, a third-party widget, an element that overrode `font-variant-numeric`).
+`roles.css` sets `font-variant-numeric: tabular-nums` on the numeric roles; `base.css` also sets
+it on `body`, so the full bundle inherits it everywhere by default. `.mob-nums` re-asserts it
+for anything outside a role (a canvas label, an SVG `<text>`, a third-party widget, or an element
+that overrode `font-variant-numeric`).
 
 **The rule:** any number that can ever appear directly above, below, or beside another number of
 the same kind is set in tabular figures. In practice this is every number in a table, a list, a
@@ -34,7 +37,7 @@ neighbours. Tabular figures make an updating number silent.
 | Metric at exactly 16px | mono | `.mob-figure-sm` | The largest mono figure, and the last one before the crossover `[src]` |
 | Micro-label above a value | mono, uppercase | `.mob-label` | 9.5px / `--mob-tracking-label` |
 
-The sans figure roles inherit `tabular-nums` from `body`. Verify it survives your font stack:
+The figure roles set `tabular-nums` in `roles.css`. Verify it survives your font stack:
 some system faces expose tabular figures only under `font-feature-settings: 'tnum'`, and a
 webfont subset may drop the feature entirely. If a hero figure ever visibly shifts width while
 counting, that is the cause.
@@ -102,7 +105,8 @@ A signed value carries **both** a sign glyph and a tone. Never one without the o
 <span class="mob-meta  mob-nums"           data-mob-sign="positive">+0.67%</span>
 ```
 
-`base.css` binds the attribute to colour, so a component never branches on sign in two places:
+`roles.css` binds the attribute to colour (`base.css` imports it), so a component never branches
+on sign in two places:
 
 ```css
 [data-mob-sign='positive'] { color: var(--mob-positive); }
@@ -229,9 +233,9 @@ Copy behaviour: confirm **inside** the control — swap the label for ~1.2s (`Co
   into a support ticket.
 - **Show both inline** when the reader is reconciling against an external record (an explorer, a
   bank statement, a log): `12 Mar, 14:02 · 3d ago`.
-- **Live counters tick on the poll interval, not on a 1s timer.** The handoff's `updated 3s ago`
-  `[src]` reflects a ~2–3s poll. A stamp that counts every second while the data does not change
-  is animation pretending to be information.
+- **Age display and data fetching are separate clocks.** A local timer may refresh “3s ago” from
+  the last real timestamp; it must not imply a network refetch or mutate that timestamp. Choose a
+  display cadence appropriate to the visible unit and keep the host's fetch policy intact.
 - **Reserve the width.** `9s ago` → `12m ago` is a width change; right-align it or give it a
   `min-width` so the header row does not shuffle.
 - **Durations**: two units maximum, largest first — `1h 12m`, not `72 minutes` and not
@@ -312,8 +316,9 @@ Two more rules:
 
 ## 13. The formatting module
 
-Implement this once. Every formatter returns the exact value alongside the display string, so a
-caller physically has what it needs for the `title` or tooltip and cannot forget it.
+This is a display-layer reference for finite JavaScript numbers, not an arbitrary-precision money
+library. Preserve the host's decimal source, locale and established formatters when they carry more
+precision than a `number`. Every formatter returns the source numeric string alongside display data.
 
 ```js
 // mob-format — single source of numeric truth. One policy object per product.
@@ -324,6 +329,7 @@ const POLICY = {
   compactSigDigits: 3,          // $24.8K, $3.21M
   sigDigitsBelow1:  4,          // $0.2194, $0.01450, $0.009909  (§3)
   percentFloor:     0.01,       // under this, render "<0.01%"   (§5)
+  moneyFloor:       1e-8,       // do not turn a non-zero value into $0.00000000
   idHead: 4, idTail: 4,         // 7xQp…91Md                     (§8)
   relativeUntilMs:  7 * 864e5,  // then switch to an absolute date (§9)
 };
@@ -334,63 +340,75 @@ const ELL   = '…';  // ellipsis, never '...'
 
 // §3 — the whole precision policy, in four lines.
 // 8040.87 -> 2 | 31.12 -> 2 | 0.2194 -> 4 | 0.01450 -> 5 | 0.009909 -> 6
-function decimalsFor(n) {
+export function decimalsFor(n) {
   const a = Math.abs(n);
   if (a === 0 || a >= 1) return 2;
   return Math.min(8, POLICY.sigDigitsBelow1 - 1 - Math.floor(Math.log10(a)));
 }
 
 // §2 + §3 + §6. `compact` is decided per COLUMN by the caller, never per cell.
-function money(n, { compact = false, currency = POLICY.currency } = {}) {
-  if (n == null || Number.isNaN(n)) return { display: DASH, exact: null, state: 'none' };
+export function money(n, { compact = false, currency = POLICY.currency } = {}) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return { display: DASH, exact: null, state: 'none' };
   const d = decimalsFor(n);
+  const floor = new Intl.NumberFormat(POLICY.locale, { style: 'currency', currency,
+                minimumFractionDigits: 8, maximumFractionDigits: 8 }).format(POLICY.moneyFloor);
+  if (n !== 0 && Math.abs(n) < POLICY.moneyFloor) {
+    return { display: `${n < 0 ? MINUS : ''}<${floor}`, exact: String(n), state: 'ok' };
+  }
   const opts = compact && Math.abs(n) >= POLICY.compactFrom
     ? { notation: 'compact', maximumSignificantDigits: POLICY.compactSigDigits }
     : { minimumFractionDigits: d, maximumFractionDigits: d };
   return {
     display: new Intl.NumberFormat(POLICY.locale, { style: 'currency', currency, ...opts }).format(n),
-    exact:   new Intl.NumberFormat(POLICY.locale, { style: 'currency', currency,
-               minimumFractionDigits: 2, maximumFractionDigits: 8 }).format(n),
+    exact: String(n),
     state: 'ok',
   };
 }
 
 // §5. `sign:false` for shares and rates; they are not deltas.
-function pct(n, { sign = true, decimals = 2 } = {}) {
-  if (n == null) return { display: DASH, state: 'none' };
+export function pct(n, { sign = true, decimals = 2 } = {}) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return { display: DASH, exact: null, state: 'none' };
   const a = Math.abs(n);
-  if (sign && a > 0 && a < POLICY.percentFloor) return { display: `<${POLICY.percentFloor}%`, state: 'ok' };
-  const body = a.toFixed(decimals) + '%';
-  return { display: sign ? glyphFor(n) + body : body, state: 'ok' };
+  if (sign && a > 0 && a < POLICY.percentFloor) return { display: `${glyphFor(n)}<${POLICY.percentFloor}%`, exact: String(n), state: 'ok' };
+  const body = (sign ? a : n).toFixed(decimals).replace('-', MINUS) + '%';
+  return { display: sign ? glyphFor(n) + body : body, exact: String(n), state: 'ok' };
 }
 
 // §4. Sign and tone are produced together so they can never disagree.
-function glyphFor(n) { return n > 0 ? '+' : n < 0 ? MINUS : ''; }
-function toneFor(n)  { return n > 0 ? 'positive' : n < 0 ? 'negative' : 'neutral'; }
-function signed(n, format = money) {
-  const { display, exact } = format(Math.abs(n));
-  return { display: glyphFor(n) + display, exact, sign: toneFor(n) };  // -> +$0.2195
+export function glyphFor(n) { return n > 0 ? '+' : n < 0 ? MINUS : ''; }
+export function toneFor(n)  { return n > 0 ? 'positive' : n < 0 ? 'negative' : 'neutral'; }
+export function signedMoney(n, options) {
+  if (typeof n !== 'number' || !Number.isFinite(n)) return { display: DASH, exact: null, state: 'none', sign: 'neutral' };
+  const result = money(Math.abs(n), options);
+  return { ...result, display: glyphFor(n) + result.display, exact: String(n), sign: toneFor(n) };
 }
 
 // §8. Returns the pair, so the caller cannot render a truncation without the original.
-function ident(s, head = POLICY.idHead, tail = POLICY.idTail) {
+export function ident(s, head = POLICY.idHead, tail = POLICY.idTail) {
   if (!s) return { display: DASH, full: null };
   const short = s.length <= head + tail + 1 ? s : s.slice(0, head) + ELL + s.slice(-tail);
   return { display: short, full: s };  // full -> copy button + title
 }
 
 // §9. Both forms, always — the cell shows `rel`, the title shows `abs`.
-function when(ts, now = Date.now()) {
-  const d = Math.max(0, now - ts);
+export function when(ts, now = Date.now()) {
+  const stamp = typeof ts === 'number' ? ts : Date.parse(ts);
+  const stampDate = new Date(stamp);
+  const nowDate = new Date(now);
+  if (!Number.isFinite(stamp) || !Number.isFinite(now) ||
+      !Number.isFinite(stampDate.getTime()) || !Number.isFinite(nowDate.getTime())) {
+    return { rel: DASH, abs: DASH, state: 'none' };
+  }
+  const d = Math.max(0, now - stamp);
   const abs = new Intl.DateTimeFormat(POLICY.locale, { day: 'numeric', month: 'short',
-                year: new Date(ts).getFullYear() === new Date(now).getFullYear() ? undefined : 'numeric',
-                hour: '2-digit', minute: '2-digit' }).format(ts);
+                year: stampDate.getFullYear() === nowDate.getFullYear() ? undefined : 'numeric',
+                hour: '2-digit', minute: '2-digit' }).format(stamp);
   const rel = d >= POLICY.relativeUntilMs ? abs
             : d >= 864e5 ? `${Math.floor(d / 864e5)}d ago`
             : d >= 36e5  ? `${Math.floor(d / 36e5)}h ago`
             : d >= 6e4   ? `${Math.floor(d / 6e4)}m ago`
                          : `${Math.floor(d / 1e3)}s ago`;
-  return { rel, abs };
+  return { rel, abs, state: 'ok' };
 }
 ```
 
@@ -402,7 +420,7 @@ Wiring the output to the system:
       data-mob-sign="positive" title="+$0.21953104">+$0.2195</span>
 
 <!-- truncated identifier: display and full value arrive together -->
-<button class="mob-control-label" data-copy="7xQpLm4v…Xr2W91Md" title="Copy address">
+<button class="mob-control-label" data-copy="7xQpLm4vA7c8N2s9Xr2W91Md" title="Copy address">
   7xQp…91Md
 </button>
 

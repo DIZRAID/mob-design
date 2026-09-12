@@ -6,7 +6,7 @@
        primitive  ->  semantic  ->  component
 
    Components MUST reference semantic or component tokens only. A literal hex
-   inside a component stylesheet is a bug (see docs/08-adoption.md, "Hygiene").
+   inside a component stylesheet is a bug (see docs/09-adoption.md, "Hygiene").
 
    Provenance markers used throughout:
        [src]   verbatim from the calibrated design handoff (Dashboard.dc.html)

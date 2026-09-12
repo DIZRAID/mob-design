@@ -159,7 +159,7 @@ own via `flex-wrap` and the 1px `row-gap` draws the horizontal hairlines for fre
 │                                                                            │
 │ ┌ ENTITY HEADER ────────────────────────────────────────────────────────┐  │
 │ │ [avatars]  NUDES / USDG          .mob-heading-md                      │  │
-│ │            V4 · 0.90% · 1 rungs  .mob-meta-sm                         │  │
+│ │            V4 · 0.90% · 1 rung   .mob-meta-sm                         │  │
 │ │  [status chip]   ──── spacer ────   meta   [ghost] [PRIMARY]          │  │
 │ └───────────────────────────────────────────────────────────────────────┘  │
 │                                                                            │
@@ -366,8 +366,8 @@ Card · Optimistic action or confirm (§11–12) on submit · Inline error (§13
   no second set of styles.
 - Labels are persistent and above the field. A placeholder is not a label (`mobb` spec §4.4):
   it disappears exactly when the user needs it, during input.
-- Helper text and error text occupy the **same slot**, so an error does not push the rest of
-  the form down. The slot is reserved even when empty.
+- Helper text remains available when an error appears. Link both helper and error with
+  `aria-describedby`; reserve layout space if the product requires a motionless form.
 - Validation is on blur, not on keystroke. Re-validating on keystroke turns a half-typed
   email into an error message and trains people to ignore errors.
 - The summary block sits on `--mob-bg-sunken` and restates the consequence in words and real

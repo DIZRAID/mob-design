@@ -12,9 +12,9 @@
    yourself wanting `bg-gray-925`, you wanted `bg-background-surface`.
 
    Most scales here REPLACE Tailwind's rather than extend it. That is the point:
-   `text-sm`, `rounded-lg`, `shadow-xl` and `z-50` do not exist, because none of
-   them are decisions this system lets a screen make. Only `maxWidth` extends,
-   so `max-w-full` survives.
+   stock `text-sm`, `shadow-xl` and `z-50` do not exist. Radius keys such as
+   `rounded-lg` remain, but point to the system's named radius tokens. Only
+   `maxWidth` extends, so `max-w-full` survives.
 
    Every colour, radius, size and duration is `var(--mob-*)`, never a literal.
    Tailwind and the raw CSS therefore read the same values at runtime, and
@@ -58,6 +58,7 @@
 // USAGE — tailwind.config.js
 //
 //   module.exports = {
+//     // Use './mob-design/tailwind/preset.js' for an in-repo clone.
 //     presets: [require('mob-design/tailwind/preset.js')],
 //     content: ['./src/**/*.{js,jsx,ts,tsx,html}'],
 //   };
@@ -201,7 +202,7 @@ module.exports = {
     },
 
     /* --- Spacing (keys are PIXELS) ---------------------------------------
-       `px` is the hairline: fuse segments with `gap-px` over a `bg-frame`
+       `px` is the hairline: fuse segments with `gap-px` over a `bg-background-frame`
        parent instead of drawing borders between them.                      */
     spacing: {
       0: 'var(--mob-space-0)',
@@ -232,8 +233,8 @@ module.exports = {
       sans: 'var(--mob-font-sans)',
     },
     /* Keyed by ROLE, not by size, and each key carries its own line-height
-       and tracking. `text-label` is the uppercase micro-label everywhere it
-       appears; there is no `text-xs` to disagree with it.                   */
+       and tracking. `text-label` provides label metrics; use `.mob-label` for
+       the complete uppercase/family/tone composition.                      */
     fontSize,
 
     /* --- Motion ----------------------------------------------------------

@@ -798,8 +798,8 @@
     color var(--mob-duration-fast) var(--mob-ease-standard),
     transform var(--mob-duration-instant) var(--mob-ease-standard);
 }
-.mob-delta:is(a, button):hover {
-  --mob-delta-color: color-mix(in srgb, var(--mob-fg-primary) var(--mob-dataviz-emphasis), var(--mob-delta-color));
+.mob-delta:is(a, button):hover:not(:disabled, [aria-disabled='true']) {
+  color: color-mix(in srgb, var(--mob-fg-primary) var(--mob-dataviz-emphasis), var(--mob-delta-color));
 }
 .mob-delta:is(a, button):focus-visible {
   outline: none;

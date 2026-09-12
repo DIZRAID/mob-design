@@ -12,7 +12,8 @@
     "gap": { "$type": "dimension", "$value": "6px", "$description": "Icon-to-label inside a control, and control-to-control in an action stack.", "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-control-gap" } },
     "icon": { "$type": "dimension", "$value": "16px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-icon" } },
     "icon-lg": { "$type": "dimension", "$value": "20px", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-icon-lg" } },
-    "tap-target": { "$type": "dimension", "$value": "44px", "$description": "Coarse-pointer hit floor. base.css grows the hit area with a pseudo-element so the painted control keeps its compact size — density and accessibility are not in tension here.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-tap-target" } }
+    "icon-xl": { "$type": "dimension", "$value": "24px", "$description": "Standalone icon size, not paired with a label.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-control-icon-xl" } },
+    "tap-target": { "$type": "dimension", "$value": "44px", "$description": "Shared coarse-pointer floor: buttons and tabs use a pseudo-element hit area; menu rows and interactive chips grow their real box to preserve their state pseudo-elements.", "$extensions": { "mob.provenance": "drv", "mob.cssVar": "--mob-tap-target" } }
   },
 
   "card": {

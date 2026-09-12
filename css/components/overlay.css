@@ -1136,6 +1136,10 @@ dialog.mob-modal {
   max-inline-size: var(--mob-modal-fit-w);
   max-block-size: var(--mob-modal-fit-h);
 }
+/* Author display rules override the user-agent dialog rule. Restore the native
+   closed state explicitly so a classed <dialog> is absent until showModal(). */
+dialog.mob-modal:not([open]),
+dialog.mob-drawer:not([open]) { display: none; }
 dialog.mob-modal::backdrop { background: var(--mob-backdrop-bg); }
 
 @supports (transition-behavior: allow-discrete) {
@@ -1165,7 +1169,7 @@ dialog.mob-modal::backdrop { background: var(--mob-backdrop-bg); }
       display var(--mob-overlay-duration) allow-discrete,
       overlay var(--mob-overlay-duration) allow-discrete;
   }
-  dialog.mob-modal:not([open])::backdrop { opacity: 0; }
+dialog.mob-modal:not([open])::backdrop { opacity: 0; }
 
   @starting-style {
     dialog.mob-modal[open],
@@ -1187,6 +1191,15 @@ dialog.mob-modal::backdrop { background: var(--mob-backdrop-bg); }
       translate: calc(100% * var(--mob-overlay-flip)) 0;
     }
     dialog.mob-modal[open]::backdrop { opacity: 0; }
+  }
+}
+
+/* Component-owned touch floor: this file loads after base.css, and the real
+   row grows so its loading ::after remains available. */
+@media (pointer: coarse) {
+  .mob-menu__item {
+    min-inline-size: var(--mob-tap-target);
+    min-block-size: var(--mob-tap-target);
   }
 }
 

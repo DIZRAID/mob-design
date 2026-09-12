@@ -3,7 +3,7 @@
    -----------------------------------------------------------------------------
    The 10.5px mono pill that carries a chain name, a count, a status or a filter.
    Two of them are [src]: "Robinhood Chain" in the portfolio header row and
-   "1 ladders · 1 rungs" in the open-positions header row. They are the same
+   "1 ladder · 1 rung" in the open-positions header row. They are the same
    component — the prototype painted them on two surfaces one unit apart
    (#131417 / #141519), which is a prototype accident and not a design decision.
    This file collapses both onto --mob-chip-bg.
@@ -17,7 +17,7 @@
        └──────────────────────────────── .mob-chip__dot      (optional)
 
    RULES FOR A CONSUMER
-   1. A chip carries a fragment, never a sentence. "Above · sold", "V4", "1 rungs",
+   1. A chip carries a fragment, never a sentence. "Above · sold", "V4", "1 rung",
       "Robinhood Chain" — a status, a category, a filter, a count. If the string
       needs a verb, it is a message and belongs in a banner or a toast, not here.
       A chip never wraps: long text either truncates (.mob-truncate on __label)
@@ -27,7 +27,7 @@
       bare red dot, and never rely on --positive vs --negative alone to tell two
       states apart.
    3. An interactive chip carries data-mob-interactive. Not the element type —
-      base.css sizes the coarse-pointer hit target off that attribute, so a
+      this component sizes the coarse-pointer hit target off that attribute, so a
       <button class="mob-chip"> without it is a bug. A static chip is a <span>.
    4. Selection is announced, not just painted: aria-pressed on a filter toggle,
       aria-selected on an option, aria-current on a nav chip. The styles key off
@@ -351,19 +351,22 @@
   --mob-chip-fg:     var(--mob-chip-fg-selected);
 }
 
-/* Coarse pointers: base.css sets position: relative on an interactive chip but
-   deliberately does not inflate its hit box the way it does for .mob-btn and
-   .mob-tab, and this file does not either — a 44px target around a 22px chip
-   would overlap its neighbours in a wrapped group and fire the wrong filter.
-   Give touch surfaces room instead: --md rather than --sm, and enough
-   --mob-chip-group-gap that the chips are not shoulder to shoulder. A chip is
-   not the right control for a primary touch action; a button is. */
+/* Coarse pointers grow the real chip box to the shared 44px floor.
+   This preserves the loading skeleton pseudo-element and prevents overlapping
+   invisible hit areas in wrapped groups. */
 
 /* Focus. The global ring stands; only its radius is corrected — base.css rounds
    the ring to --mob-radius-sm, which would jump a 6px chip to 8px on focus. */
 .mob-chip:focus-visible {
   box-shadow: var(--mob-focus-ring);
   border-radius: var(--mob-chip-radius);
+}
+
+@media (pointer: coarse) {
+  .mob-chip[data-mob-interactive] {
+    min-inline-size: var(--mob-tap-target);
+    min-block-size: var(--mob-tap-target);
+  }
 }
 
 /* Disabled. Contrast drops AND the affordance goes: the border falls back to

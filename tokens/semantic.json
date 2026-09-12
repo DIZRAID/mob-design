@@ -198,6 +198,11 @@
       "$description": "Accent as FOREGROUND — glyphs, the active mark in a set, the focus ring. The only accent step with enough luminance to sit on near-black as text.",
       "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-bright", "mob.theme.light": "#7c5dfa" }
     },
+    "glow": {
+      "$value": "{color.violet.400}",
+      "$description": "Glow colour behind an active mark. Kept one step deeper than accent.bright so the glow does not become a blurred copy of the foreground.",
+      "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-glow", "mob.theme.light": "#7c5dfa" }
+    },
     "soft": {
       "$value": "{color.violet.600}",
       "$extensions": { "mob.provenance": "src", "mob.cssVar": "--mob-accent-soft", "mob.theme.light": "#6d4df0" }
@@ -333,11 +338,11 @@
     "$type": "shadow",
     "$description": "The one place blur is allowed: marking the ACTIVE member of a set of otherwise identical marks. The 11px radius and 50% mix are measured off the active range bin in the handoff. A glow is a state, never decoration — two glowing things on one screen means neither is active.",
     "accent": {
-      "$value": { "offsetX": "0", "offsetY": "0", "blur": "11px", "spread": "0", "color": "color-mix(in srgb, var(--mob-accent-bright) 50%, transparent)" },
+      "$value": { "offsetX": "0", "offsetY": "0", "blur": "11px", "spread": "0", "color": "color-mix(in srgb, var(--mob-accent-glow) 50%, transparent)" },
       "$extensions": {
         "mob.provenance": "src",
         "mob.cssVar": "--mob-glow-accent",
-        "mob.cssValue": "0 0 11px color-mix(in srgb, var(--mob-accent-bright) 50%, transparent)",
+        "mob.cssValue": "0 0 11px color-mix(in srgb, var(--mob-accent-glow) 50%, transparent)",
         "mob.theme.light": "0 0 11px color-mix(in srgb, var(--mob-accent) 34%, transparent)"
       }
     },

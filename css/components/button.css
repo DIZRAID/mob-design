@@ -573,14 +573,13 @@
 /* ERROR — the last invocation failed and the control is offering a retry. Not a
    variant: it can land on any of them, and it leaves the geometry alone. Colour
    is not a sufficient signal — change the label and show the reason. */
-.mob-btn[data-mob-error],
-.mob-icon-btn[data-mob-error] {
+.mob-btn[data-mob-error]:not(:disabled, [aria-disabled='true']),
+.mob-icon-btn[data-mob-error]:not(:disabled, [aria-disabled='true']) {
   --mob-btn-bg: var(--mob-negative-tint);
   --mob-btn-fg: var(--mob-negative);
   --mob-btn-border: color-mix(in oklab, var(--mob-negative) 34%, var(--mob-border-control));
 }
-/* Guarded: this is the only state rule that outranks the disabled block, so it
-   has to opt out of disabled explicitly. Disabled always wins. */
+/* Error hover is also gated so disabled always wins. */
 .mob-btn[data-mob-error]:hover:not(:disabled, [aria-disabled='true']),
 .mob-icon-btn[data-mob-error]:hover:not(:disabled, [aria-disabled='true']) {
   --mob-btn-fg: var(--mob-negative-raised);

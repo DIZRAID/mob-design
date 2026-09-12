@@ -1,0 +1,101 @@
+/* =============================================================================
+   mob-design — additive typography and tone roles
+   Import after tokens.css when a host wants mob-design roles without the
+   global body, link, scrollbar, reset, or focus rules from base.css.
+   ============================================================================= */
+
+/* Display & headings — sans, 600, tight. */
+.mob-display-xl,
+.mob-display-lg,
+.mob-display-md,
+.mob-heading-xl,
+.mob-heading-lg,
+.mob-heading-md,
+.mob-heading-sm {
+  font-family: var(--mob-font-sans);
+  font-weight: var(--mob-weight-semibold);
+  letter-spacing: var(--mob-tracking-tight);
+  color: var(--mob-fg-primary);
+}
+.mob-display-xl { font-size: clamp(40px, 6.4vw, var(--mob-size-12xl)); line-height: var(--mob-leading-display); }
+.mob-display-lg { font-size: clamp(34px, 5vw,   var(--mob-size-11xl)); line-height: var(--mob-leading-display); }
+.mob-display-md { font-size: clamp(28px, 3.6vw, var(--mob-size-10xl)); line-height: var(--mob-leading-tight); }
+.mob-heading-xl { font-size: clamp(24px, 2.6vw, var(--mob-size-9xl));  line-height: var(--mob-leading-tight); }
+.mob-heading-lg { font-size: var(--mob-size-8xl); line-height: var(--mob-leading-tight); }
+.mob-heading-md { font-size: var(--mob-size-4xl); line-height: var(--mob-leading-snug); }
+.mob-heading-sm { font-size: var(--mob-size-2xl); line-height: var(--mob-leading-snug); }
+
+.mob-title {
+  font-family: var(--mob-font-sans);
+  font-size: var(--mob-size-xl);
+  font-weight: var(--mob-weight-semibold);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-primary);
+}
+
+/* The 16px figure stays mono; figures from 22px are sans. */
+.mob-figure-xl,
+.mob-figure-lg,
+.mob-figure-md,
+.mob-figure-sm { font-variant-numeric: tabular-nums; }
+.mob-figure-xl { font-family: var(--mob-font-sans); font-size: var(--mob-size-7xl); font-weight: 600; letter-spacing: var(--mob-tracking-tight); line-height: var(--mob-leading-tight); }
+.mob-figure-lg { font-family: var(--mob-font-sans); font-size: var(--mob-size-6xl); font-weight: 600; letter-spacing: var(--mob-tracking-tight); line-height: var(--mob-leading-tight); }
+.mob-figure-md { font-family: var(--mob-font-sans); font-size: var(--mob-size-5xl); font-weight: 600; letter-spacing: var(--mob-tracking-tight); line-height: var(--mob-leading-tight); }
+.mob-figure-sm { font-family: var(--mob-font-mono); font-size: var(--mob-size-3xl); line-height: var(--mob-leading-tight); }
+
+.mob-body-lg { font-family: var(--mob-font-sans); font-size: var(--mob-size-4xl); line-height: var(--mob-leading-relaxed); color: var(--mob-fg-secondary); letter-spacing: 0; }
+.mob-body    { font-family: var(--mob-font-sans); font-size: var(--mob-size-lg);  line-height: var(--mob-leading-relaxed); color: var(--mob-fg-secondary); letter-spacing: 0; }
+.mob-body-sm { font-family: var(--mob-font-sans); font-size: var(--mob-size-md);  line-height: var(--mob-leading-normal);  color: var(--mob-fg-muted); letter-spacing: 0; }
+
+.mob-value,
+.mob-value-sm,
+.mob-meta,
+.mob-meta-sm,
+.mob-dim,
+.mob-label,
+.mob-control-label { font-family: var(--mob-font-mono); }
+.mob-value,
+.mob-value-sm,
+.mob-meta,
+.mob-meta-sm,
+.mob-dim { font-variant-numeric: tabular-nums; }
+
+.mob-value    { font-size: var(--mob-size-xl);   color: var(--mob-fg-primary); }
+.mob-value-sm { font-size: var(--mob-size-base); color: var(--mob-fg-secondary); }
+.mob-meta     { font-size: var(--mob-size-xs);   color: var(--mob-fg-label); line-height: var(--mob-leading-snug); }
+.mob-meta-sm  { font-size: var(--mob-size-2xs);  color: var(--mob-fg-label); line-height: var(--mob-leading-snug); }
+.mob-dim      { font-size: var(--mob-size-3xs);  color: var(--mob-fg-dim); }
+
+.mob-label {
+  font-size: var(--mob-size-3xs);
+  letter-spacing: var(--mob-tracking-label);
+  line-height: var(--mob-leading-snug);
+  color: var(--mob-fg-label);
+  text-transform: uppercase;
+}
+
+.mob-control-label { font-size: var(--mob-size-sm); line-height: var(--mob-leading-flat); }
+
+.mob-tone-primary   { color: var(--mob-fg-primary); }
+.mob-tone-secondary { color: var(--mob-fg-secondary); }
+.mob-tone-muted     { color: var(--mob-fg-muted); }
+.mob-tone-label     { color: var(--mob-fg-label); }
+.mob-tone-dim       { color: var(--mob-fg-dim); }
+.mob-tone-accent    { color: var(--mob-accent-bright); }
+.mob-tone-positive  { color: var(--mob-positive); }
+.mob-tone-negative  { color: var(--mob-negative); }
+.mob-tone-warning   { color: var(--mob-warning); }
+.mob-tone-info      { color: var(--mob-info); }
+
+[data-mob-sign='positive'] { color: var(--mob-positive); }
+[data-mob-sign='negative'] { color: var(--mob-negative); }
+[data-mob-sign='neutral']  { color: var(--mob-fg-secondary); }
+
+.mob-nums     { font-variant-numeric: tabular-nums; }
+.mob-truncate { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mob-nowrap   { white-space: nowrap; }
+
+.mob-sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+}
