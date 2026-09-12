@@ -8,7 +8,7 @@ It provides tokens, themes, typography roles, components, and visual states. App
 behavior stays in the application: this library does not implement routes, requests, validation,
 sorting, focus traps, or menu controllers.
 
-![A dark mob-design project overview with progress, tasks, a project table, and activity](docs/assets/preview.png)
+![Projects table with status, due dates, progress, and filters](docs/assets/preview.png)
 
 ## Why use it
 
