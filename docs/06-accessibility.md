@@ -547,12 +547,13 @@ signal.
 `--mob-tap-target: 44px` is the floor. The painted control heights are deliberately below it —
 `--mob-control-h-sm` 30px, `-md` 34px, `-lg` 40px — because density is the product.
 
-The system reaches 44px three different ways, and which one is correct depends on whether growing
+The system reaches 44px in several ways, and which one is correct depends on whether growing
 the painted box would damage the layout:
 
 | Strategy | Where | Mechanism |
 |---|---|---|
-| Invisible overlay | `base.css`: `.mob-btn`, `.mob-icon-btn`, `.mob-tab`, `.mob-menu-item` | A centred transparent `::after` at min 44×44 extends the hit area beyond the painted box. The button still *looks* 30px. |
+| Invisible overlay | `base.css`: `.mob-btn`, `.mob-icon-btn`, `.mob-tab` | A centred transparent `::after` at min 44×44 extends the hit area beyond the painted box. The button still *looks* 30px. |
+| Raise the component row | `overlay.css`: `.mob-menu__item`; `chip.css`: interactive chips | The real layout box reaches 44px, preserving each component's loading pseudo-element and preventing overlapping targets. |
 | Raise the row height | `nav.css`: `--mob-navlink-h` and `--mob-sidebar-item-h` become `--mob-tap-target`; breadcrumb links gain vertical padding | A nav row has empty space to spare, so growing it costs nothing and avoids overlap entirely. |
 | Raise the minimum | `choice.css`: `.mob-checkbox`, `.mob-radio`, `.mob-toggle` get `min-block-size: var(--mob-tap-target)` | The control is the label row; the box grows, the glyph does not. |
 
@@ -562,7 +563,7 @@ the density survives. Never solve this with a global `min-height`.
 **Use the overlay only where the painted box must stay small.** It is the strategy with a side
 effect (below); if the component has room to grow on touch, grow it.
 
-Two things that remain the author's job:
+One thing remains the author's job:
 
 **1. Pitch, not just size.** The overlays are centred on their control and will overlap. Two 30px
 buttons stacked with `--mob-control-gap` (6px) have a 36px pitch, so their 44px targets overlap by
@@ -570,37 +571,6 @@ buttons stacked with `--mob-control-gap` (6px) have a 36px pitch, so their 44px 
 bottom edge of Claim's target sits inside Close's. **A destructive action must have clear space:**
 on coarse pointers either raise the stack gap so the pitch reaches 44px, or reorder so nothing
 non-destructive shares an overlap with Close.
-
-**2. Two selectors in `base.css` do not currently reach their components. Verify before you rely on
-the floor.** As the files stand:
-
-- **Interactive chips.** `chip.css` states in its header that base.css sizes the coarse-pointer hit
-  target off `data-mob-interactive`. `base.css` lists `.mob-chip[data-mob-interactive]` in the
-  `position: relative` rule but **not** in the `::after` rule beside it, so no overlay is drawn. An
-  interactive chip is `--mob-chip-pad-y` 3px plus a 10.5px line — roughly a 20px target.
-- **Menu items.** `base.css` targets `.mob-menu-item`; `overlay.css` ships `.mob-menu__item` (BEM
-  element, double underscore). The selector matches nothing, so a menu row stays at
-  `--mob-menu-item-h` = `--mob-control-h-sm` = 30px on touch.
-
-Both are one-line fixes and both belong in `base.css`, since that is where the contract is
-documented — add `.mob-chip[data-mob-interactive]::after` and correct `.mob-menu-item::after` to
-`.mob-menu__item::after`. Until that lands, patch it locally:
-
-```css
-@media (pointer: coarse) {
-  .mob-chip[data-mob-interactive]::after,
-  .mob-menu__item::after {
-    content: '';
-    position: absolute;
-    inset: 50% auto auto 50%;
-    translate: -50% -50%;
-    min-width: var(--mob-tap-target);
-    min-height: var(--mob-tap-target);
-    width: 100%;
-    height: 100%;
-  }
-}
-```
 
 The floor applies to pointer targets, not to a text link inside a running paragraph.
 

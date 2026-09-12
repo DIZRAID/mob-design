@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en" data-mob-theme="dark" data-mob-density="product">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>mob-design — working starter screen</title>
+  <link rel="stylesheet" href="../../css/mob.css">
+  <link rel="stylesheet" href="./app.css">
+</head>
+<body>
+  <header class="demo-header">
+    <a class="mob-title" href="./">mob-design</a>
+    <div class="mob-cluster">
+      <label class="mob-field mob-field--sm">
+        <span class="mob-field__label">Theme</span>
+        <span class="mob-input-wrap mob-input-wrap--select">
+          <select id="theme" class="mob-select" aria-label="Interface theme">
+            <option value="dark">Dark</option>
+            <option value="light">Light</option>
+          </select>
+        </span>
+      </label>
+      <label class="mob-field mob-field--sm">
+        <span class="mob-field__label">Density</span>
+        <span class="mob-input-wrap mob-input-wrap--select">
+          <select id="density" class="mob-select" aria-label="Interface density">
+            <option value="marketing">Marketing</option>
+            <option value="product" selected>Product</option>
+            <option value="data">Data</option>
+          </select>
+        </span>
+      </label>
+    </div>
+  </header>
+
+  <main id="content" class="demo-shell" data-mob-density="product">
+    <section class="demo-intro">
+      <p class="mob-label">Working example · no backend</p>
+      <h1 class="mob-heading-xl">Profile settings</h1>
+      <p class="mob-body">This small screen demonstrates real fields, validation, and save states. It does not send data anywhere.</p>
+    </section>
+
+    <div class="demo-grid">
+      <form id="settings" class="mob-card demo-form" novalidate>
+        <div class="mob-card__header">
+          <div class="mob-stack demo-card-heading">
+            <h2 class="mob-title">Basic details</h2>
+            <p class="mob-body-sm">Changes are saved only in this page's memory.</p>
+          </div>
+        </div>
+
+        <label id="name-field" class="mob-field">
+          <span class="mob-field__label">Display name <span class="mob-field__required" aria-hidden="true">*</span></span>
+          <input id="name" class="mob-input" name="name" value="Alex" required minlength="2" aria-describedby="name-help">
+          <span id="name-help" class="mob-field__hint">At least two characters. Enter “error” to see the demo save fail.</span>
+          <span id="name-error" class="mob-field__error" hidden>Enter at least two characters.</span>
+        </label>
+
+        <label class="mob-field">
+          <span class="mob-field__label">Time zone</span>
+          <span class="mob-input-wrap mob-input-wrap--select">
+            <select id="timezone" class="mob-select" name="timezone">
+              <option>Asia/Bangkok</option>
+              <option>Europe/Moscow</option>
+              <option>UTC</option>
+            </select>
+          </span>
+        </label>
+
+        <label class="mob-checkbox">
+          <input class="mob-checkbox__input" type="checkbox" name="digest" checked>
+          <span class="mob-checkbox__box" aria-hidden="true"></span>
+          <span class="mob-checkbox__label">Send a weekly summary</span>
+        </label>
+
+        <div class="demo-actions">
+          <button id="save" class="mob-btn mob-btn--primary" type="submit">Save</button>
+          <button id="reset" class="mob-btn mob-btn--ghost" type="reset">Reset</button>
+        </div>
+      </form>
+
+      <aside class="mob-card mob-card--sunken demo-status" aria-labelledby="status-title">
+        <h2 id="status-title" class="mob-title">Status</h2>
+        <div id="status" aria-live="polite">
+          <div class="mob-empty mob-empty--bare">
+            <div class="mob-empty__visual" aria-hidden="true">✓</div>
+            <p class="mob-empty__title">No changes yet</p>
+            <p class="mob-empty__sub">Edit the form and save it to see the result.</p>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>

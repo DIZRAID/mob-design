@@ -438,11 +438,99 @@
    as a prompt rather than as a value. */
 .mob-select[data-mob-placeholder] { color: var(--mob-fg-dim); }
 
-/* The native popup is drawn by the OS; these two are the only properties it
-   reliably honours, and they matter on Windows and Linux. */
+/* Classic selects keep the platform popup. These are the two properties it
+   reliably honours, and they matter on Windows and Linux. Supporting browsers
+   receive the progressive base-select enhancement below. */
 .mob-select option {
   background: var(--mob-bg-elevated);
   color: var(--mob-fg-primary);
+}
+
+/* Customizable select is a progressive enhancement for single dropdowns. The
+   control remains a native <select>: form value, reset, change events, keyboard
+   navigation and option semantics still belong to the browser. Unsupported
+   browsers keep the classic popup above. Multiple and sized selects are
+   listboxes and intentionally stay on their separate native rendering path. */
+@supports (appearance: base-select) {
+  @supports selector(::picker(select)) {
+    .mob-select:not([multiple]):not([size]),
+    .mob-select:not([multiple]):not([size])::picker(select) {
+      appearance: base-select;
+    }
+
+    /* .mob-input-wrap already paints the chevron. Do not hide the wrap's
+       ::after: loading selects reuse that slot for their spinner. */
+    .mob-select:not([multiple]):not([size])::picker-icon { display: none; }
+
+    .mob-select:not([multiple]):not([size])::picker(select) {
+      box-sizing: border-box;
+      min-inline-size: anchor-size(width);
+      max-inline-size: calc(100vw - var(--mob-space-16) * 2);
+      max-block-size: min(60vh, var(--mob-menu-max-h));
+      margin-block-start: var(--mob-space-4);
+      padding: var(--mob-space-4);
+      overflow: auto;
+      border: var(--mob-border-width) solid var(--mob-border-control);
+      border-radius: var(--mob-field-radius);
+      background: var(--mob-bg-elevated);
+      color: var(--mob-fg-primary);
+      box-shadow: var(--mob-shadow-md);
+    }
+
+    .mob-select:not([multiple]):not([size]) option {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      gap: var(--mob-space-8);
+      min-block-size: var(--mob-control-h-sm);
+      padding-block: var(--mob-space-6);
+      padding-inline: var(--mob-space-8);
+      border: 0;
+      border-radius: var(--mob-radius-sm);
+      background: transparent;
+      color: var(--mob-fg-primary);
+      font-family: var(--mob-font-mono);
+      font-size: var(--mob-field-font);
+      font-weight: var(--mob-weight-regular);
+      line-height: var(--mob-leading-flat);
+      cursor: pointer;
+    }
+    .mob-select:not([multiple]):not([size]) option + option {
+      margin-block-start: var(--mob-space-2);
+    }
+
+    .mob-select:not([multiple]):not([size]) option:is(:hover, :focus) {
+      background: var(--mob-bg-hover);
+      color: var(--mob-fg-primary);
+    }
+    .mob-select:not([multiple]):not([size]) option:checked {
+      background: var(--mob-bg-selected);
+      color: var(--mob-fg-primary);
+      font-weight: var(--mob-weight-medium);
+    }
+    .mob-select:not([multiple]):not([size]) option::checkmark {
+      order: 1;
+      margin-inline-start: auto;
+      color: var(--mob-accent-bright);
+      content: '✓';
+    }
+    .mob-select:not([multiple]):not([size]) option:disabled,
+    .mob-select:not([multiple]):not([size]) optgroup:disabled option {
+      background: transparent;
+      color: var(--mob-fg-disabled);
+      cursor: not-allowed;
+    }
+    .mob-select:not([multiple]):not([size]) option:disabled::checkmark,
+    .mob-select:not([multiple]):not([size]) optgroup:disabled option::checkmark {
+      color: var(--mob-fg-disabled);
+    }
+
+    @media (pointer: coarse) {
+      .mob-select:not([multiple]):not([size]) option {
+        min-block-size: var(--mob-tap-target);
+      }
+    }
+  }
 }
 
 /* =============================================================================

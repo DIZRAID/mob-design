@@ -6,7 +6,7 @@
 <title>mob-design — living style guide</title>
 
 <!-- The fonts, loaded exactly as Dashboard.dc.html loads them. Nothing else is
-     fetched: no framework, no CDN, no build step. Open this file from disk. -->
+     fetched: no framework, no CDN, no build step. Run `npm run preview` and use HTTP. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
@@ -431,7 +431,7 @@
         </p>
       </header>
       <div class="mob-cluster">
-        <span class="mob-chip mob-chip--accent"><span class="mob-chip__dot"></span><span class="mob-chip__label">606 classes</span></span>
+        <span class="mob-chip mob-chip--accent"><span class="mob-chip__dot"></span><span class="mob-chip__label">live CSS</span></span>
         <span class="mob-chip"><span class="mob-chip__label">14 component stylesheets</span></span>
         <span class="mob-chip"><span class="mob-chip__label">3 token tiers</span></span>
         <span class="mob-chip"><span class="mob-chip__label">3 density zones</span></span>
@@ -982,7 +982,7 @@
             <div class="mob-card__body mob-cluster mob-cluster--tight">
               <span class="mob-chip"><span class="mob-chip__label">V4</span></span>
               <span class="mob-chip"><span class="mob-chip__label">0.90%</span></span>
-              <span class="mob-chip"><span class="mob-chip__label">1 rungs</span></span>
+              <span class="mob-chip"><span class="mob-chip__label">1 rung</span></span>
               <span class="mob-chip"><span class="mob-chip__label">Robinhood Chain</span></span>
             </div>
             <div class="mob-card__footer">
@@ -2463,7 +2463,7 @@
               <p class="mob-menu__group-label">Position</p>
               <button type="button" class="mob-menu__item" role="menuitem"><span class="mob-menu__icon" aria-hidden="true">◱</span><span class="mob-menu__label">Details</span><span class="mob-menu__shortcut">D</span></button>
               <button type="button" class="mob-menu__item" role="menuitem" data-mob-active><span class="mob-menu__icon" aria-hidden="true">⧉</span><span class="mob-menu__label">Copy address</span><span class="mob-menu__shortcut">⌘C</span></button>
-              <button type="button" class="mob-menu__item" role="menuitem" aria-checked="true"><span class="mob-menu__icon" aria-hidden="true">↗</span><span class="mob-menu__label">Open in explorer</span></button>
+              <button type="button" class="mob-menu__item" role="menuitemcheckbox" aria-checked="true"><span class="mob-menu__icon" aria-hidden="true">↗</span><span class="mob-menu__label">Open in explorer</span></button>
               <button type="button" class="mob-menu__item" role="menuitem" data-mob-loading aria-busy="true"><span class="mob-menu__icon" aria-hidden="true">⟳</span><span class="mob-menu__label">Rebalance</span><span class="mob-menu__shortcut">R</span></button>
               <hr class="mob-menu__separator">
               <button type="button" class="mob-menu__item mob-menu__item--danger" role="menuitem"><span class="mob-menu__icon" aria-hidden="true">✕</span><span class="mob-menu__label">Close position</span></button>
@@ -3404,7 +3404,7 @@
               </div>
             </header>
             <div class="mob-cluster">
-              <span class="mob-chip mob-chip--accent"><span class="mob-chip__dot"></span><span class="mob-chip__label">1 ladders · 1 rungs</span></span>
+              <span class="mob-chip mob-chip--accent"><span class="mob-chip__dot"></span><span class="mob-chip__label">1 ladder · 1 rung</span></span>
               <span class="mob-chip"><span class="mob-chip__label">Robinhood Chain</span></span>
             </div>
             <div class="mob-section__actions">
@@ -3731,10 +3731,10 @@
           </div>
         </aside>
 
-        <main class="mob-main">
+        <div class="mob-main">
           <div class="mob-column-header">
             <span class="mob-column-header__title">Open positions</span>
-            <span class="mob-column-header__chip"><span class="mob-chip"><span class="mob-chip__label">1 ladders · 1 rungs</span></span></span>
+            <span class="mob-column-header__chip"><span class="mob-chip"><span class="mob-chip__label">1 ladder · 1 rung</span></span></span>
             <span class="mob-column-header__spacer"></span>
             <span class="mob-column-header__meta">updated 3s ago</span>
             <span class="mob-column-header__actions">
@@ -3751,7 +3751,7 @@
                 </span>
                 <div class="mob-min-w-0">
                   <div class="mob-heading-sm mob-nowrap">NUDES / USDG</div>
-                  <div class="mob-meta-sm mob-nowrap mob-tone-muted mob-mt-3">V4 · 0.90% · 1 rungs</div>
+                  <div class="mob-meta-sm mob-nowrap mob-tone-muted mob-mt-3">V4 · 0.90% · 1 rung</div>
                 </div>
               </div>
             </div>
@@ -3802,7 +3802,7 @@
               <button type="button" class="mob-btn mob-btn--sm mob-btn--ghost mob-btn--block" aria-label="More actions for NUDES / USDG">···</button>
             </div>
           </div>
-        </main>
+        </div>
       </div>
 
       <div class="sg-block mob-mt-24">
@@ -4108,7 +4108,7 @@
               <ul class="mob-stack mob-stack--tight">
                 <li class="mob-value-sm"><strong>hover, pressed, focus.</strong> A document has one pointer and one focused element, so these three cannot all be shown at once. The showcase forces them by rebinding the same published tokens the component's own rule reads — never a new colour, never a new geometry. Switch <em>Simulate states</em> off and compare against the live control.</li>
                 <li class="mob-value-sm"><strong>Fixed-position overlays.</strong> The modal, sheet, drawer and toast region are <code class="sg-token">position: fixed</code>. The dashed boxes around them create a containing block so they render in place instead of covering the page. In a product they are fixed to the viewport, and the backdrop is a real scrim.</li>
-                <li class="mob-value-sm"><strong>Nothing else.</strong> No component on this page is a mock-up, and no class name appears here that is not in the shipped CSS.</li>
+                <li class="mob-value-sm"><strong>This is a visual catalogue, not a working product.</strong> Buttons and product data demonstrate states; they do not save, trade, navigate or call a backend. For a small functional form with real client-side state, open the <a href="../examples/starter/">starter example</a>.</li>
               </ul>
             </div>
           </div>
@@ -4133,14 +4133,13 @@
       </div>
 
       <div class="sg-block">
-        <div class="sg-block__head"><h3 class="mob-heading-sm">Coverage, and the one name that is a trap</h3></div>
+        <div class="sg-block__head"><h3 class="mob-heading-sm">Coverage</h3></div>
         <div class="mob-card">
           <div class="mob-card__body mob-stack">
             <p class="mob-body-sm sg-note">
-              593 of the 606 class names in the shipped CSS are rendered somewhere on this page. The
-              other thirteen are named where they belong and not faked: eleven need a real scroll
-              container, a real anchor element or a real trigger to mean anything, and demonstrating
-              them against a stand-in would show you a behaviour that is not the behaviour.
+              This page renders the broad component vocabulary in realistic combinations. A few
+              classes require a real scroll container, anchor or trigger to demonstrate honestly;
+              their behaviour is documented next to the owning CSS instead of being faked here.
             </p>
             <div class="mob-cluster">
               <span class="mob-chip mob-chip--sm"><span class="mob-chip__label">.mob-rail--sticky</span></span>
@@ -4156,17 +4155,8 @@
               <span class="mob-chip mob-chip--sm"><span class="mob-chip__label">.mob-modal__body--flush</span></span>
               <span class="mob-chip mob-chip--sm"><span class="mob-chip__label">.mob-popover__body--flush</span></span>
             </div>
-            <hr class="mob-divider">
             <p class="mob-body-sm sg-note">
-              One name in the CSS is <strong>not</strong> a component and must not be used as one.
-              <code class="sg-token">.mob-menu-item</code> — singular, one hyphen — appears in exactly
-              one place: base.css's coarse-pointer rule, which inflates the tap target of anything the
-              system considers a control. It paints nothing. The menu row is
-              <code class="sg-token">.mob-menu__item</code>, with the element separator. A machine
-              reading the stylesheet for class names finds both; only one of them is API.
-            </p>
-            <p class="mob-body-sm sg-note">
-              Two more names that a grep will surface and that deliberately do not exist:
+              Two names that a text search may surface and that deliberately do not exist:
               <code class="sg-token">.mob-rail--end</code> (a trailing rail is authored after
               <code class="sg-token">.mob-main</code> in the DOM, because <code class="sg-token">order</code>
               would break the tab sequence) and <code class="sg-token">.mob-canvas</code> (the canvas is
@@ -4180,10 +4170,10 @@
       <div class="mob-card mob-card--dashed mob-mt-16">
         <div class="mob-card__body">
           <p class="mob-meta">
-            This page is generated from nothing. It links <code class="sg-token">../css/mob.css</code>
+            This page links <code class="sg-token">../css/mob.css</code>
             and <code class="sg-token">../css/a11y.css</code>, loads one font, and contains one clearly
-            marked showcase stylesheet and one script with no dependencies. Open it from the filesystem;
-            there is no build step and no server. If a class in this page ever stops resolving, the CSS
+            marked showcase stylesheet and one script with no dependencies. Run <code class="sg-token">npm run preview</code>
+            and open the HTTP URL; there is no build step. If a class in this page ever stops resolving, the CSS
             moved and this page is the regression test that says so.
           </p>
         </div>

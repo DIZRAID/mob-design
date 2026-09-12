@@ -136,8 +136,9 @@ Three sanctioned refinements, and you will see all three below:
 
 ### Token overrides
 
-Every component token below can be re-declared on the block itself, on any ancestor, or on
-`:root`. Two conventions matter:
+Public hooks can be re-declared at their documented scope. A hook with no local declaration can
+inherit from an ancestor; a component-local declaration wins over an inherited ancestor value and
+must be overridden on the component itself or by a later matching rule. Two conventions matter:
 
 - Values a consumer is *expected* to change (`--mob-seg-basis`, `--mob-avatar-tint`,
   `--mob-menu-w`, `--mob-meter-bins`, `--mob-bar-weight`) are read through a `var(…,
@@ -156,8 +157,9 @@ Every component token below can be re-declared on the block itself, on any ances
 
 `css/mob.css` imports reset → tokens → base → layout → button, field, choice → chip, card,
 stat, table → nav → overlay → feedback → dataviz → motion → utilities. Utilities load last
-so a utility outranks a component rule of equal specificity on source order alone. Nothing
-in this system uses `!important`.
+so a utility outranks a component rule of equal specificity on source order alone. `!important`
+is reserved for reset-level invariants such as `[hidden]` and reduced-motion clamps, not component
+styling.
 
 ### What is not in here
 
@@ -306,7 +308,7 @@ The baseline device is only meaningful while two columns sit side by side.
 <div class="mob-column-header">
   <h2 class="mob-column-header__title mob-title">Open positions</h2>
   <span class="mob-column-header__chip">
-    <span class="mob-chip">1 ladders · 1 rungs</span>
+    <span class="mob-chip">1 ladder · 1 rung</span>
   </span>
   <span class="mob-column-header__spacer"></span>
   <span class="mob-column-header__meta">updated 3s ago</span>
@@ -646,6 +648,15 @@ icon width plus the gap.
 The kbd hint and the clear button toggle with `visibility`, never `display`: both slots keep
 their width for the life of the field, so typing the first character cannot shift the caret.
 
+Single-dropdown `.mob-select` controls progressively opt into the platform's customizable select
+picker when `appearance: base-select` and `::picker(select)` are supported. The popup uses the same
+semantic surface, border, type, selected, focus, and disabled tokens while retaining native
+`<select>` and `<option>` semantics, form values, keyboard behavior, and reset. Multiple or sized
+listboxes and unsupported browsers keep their native picker. See the
+[MDN customizable select guide](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms/Customizable_select).
+If exact popup rendering must match in every browser, use the host application's tested headless
+select component and preserve the same native form and accessibility contract.
+
 ### The label rule
 
 **The label persists after input. Always.** A placeholder is not a label — it disappears
@@ -912,7 +923,7 @@ filter.
 
 ### Rules
 
-1. **A chip carries a fragment, never a sentence.** "Above · sold", "V4", "1 rungs",
+1. **A chip carries a fragment, never a sentence.** "Above · sold", "V4", "1 rung",
    "Robinhood Chain" — a status, a category, a filter, a count. If the string needs a verb it
    is a message and belongs in a banner or a toast. A chip never wraps: long text either
    truncates (`.mob-truncate` on `__label`) or the string is wrong.
@@ -974,11 +985,9 @@ disabled nor loading, so a dead chip cannot light up under the cursor.
 a label that says what failed. There is nothing an invalid-input state could mean on a
 component that holds no input.
 
-**No inflated tap target.** `base.css` sets `position: relative` on an interactive chip but
-deliberately does not grow a 44px box: it would overlap neighbours in a wrapped group and
-fire the wrong filter. Give touch surfaces room instead — `--md` rather than `--sm`, and
-enough `--mob-chip-group-gap`. A chip is not the right control for a primary touch action; a
-button is.
+**Coarse-pointer target.** `chip.css` grows the real interactive chip box to 44px. It does not
+draw an overlapping invisible target, so wrapped neighbours remain unambiguous and the loading
+skeleton keeps its `::after`. A chip is still not the right control for a primary action.
 
 ### Component tokens
 
@@ -1365,7 +1374,7 @@ number.
 position, a ladder) rather than one of the categorical series. It is honoured on
 `.mob-card`, `.mob-segmented__seg`, `.mob-list-row`, `.mob-avatar-stack` and `.mob-avatar`.
 
-A series is assigned from **data identity**, never from position in a list. See §22 for the
+A series is assigned from **data identity**, never from position in a list. See §19.1 for the
 generic series helpers in `dataviz.css`.
 
 ---
@@ -1565,8 +1574,9 @@ horizontal rules only.
 
 ### Rules
 
-1. **Markup is a real `<table>`.** Cells may also carry `.mob-th` / `.mob-td` when the grid is
-   built from divs with ARIA roles; every selector accepts both.
+1. **Prefer a real `<table>`.** Cells may carry `.mob-th` / `.mob-td` in an ARIA grid, but those
+   classes only paint cells; the author must implement grid structure, keyboard interaction and
+   accessible relationships.
 2. **No vertical dividers by default** — that is what makes a dense table readable.
    `.mob-table--ruled` is the opt-in when the data genuinely needs a grid.
 3. Row state is native or `data-*`. There is no `.is-*` class in this file.
@@ -1689,7 +1699,7 @@ Density rebinds `--mob-table-cell-py` / `-px` to 14/16, 10/12 and 6/10.
 ### Markup
 
 ```html
-<div class="mob-table-scroll">
+<div class="mob-table-scroll" tabindex="0" role="region" aria-label="Open positions table">
   <table class="mob-table mob-table--sticky-head mob-table--stacked" data-mob-interactive>
     <caption>Open positions</caption>
     <thead>
@@ -1740,8 +1750,9 @@ Density rebinds `--mob-table-cell-py` / `-px` to 14/16, 10/12 and 6/10.
 - `aria-busy="true"` on the table during a refresh.
 - Icon-only row actions need names that identify the **row**, not just the verb: "Close ETH /
   USDG position", not "Close".
-- `.mob-table-scroll` is keyboard-focusable in its own right; that is how a keyboard user
-  scrolls a wide table holding no focusable cell. Do not remove its ring.
+- Make a wide `.mob-table-scroll` keyboard-focusable with `tabindex="0"`, `role="region"` and an
+  accessible name. CSS does not add focusability. This lets a keyboard user scroll a table with no
+  focusable cell; keep its ring.
 
 ---
 
@@ -1856,9 +1867,9 @@ Rules that are not optional:
 | `.mob-meter-frame--positive` `--negative` `--warning` `--info` `--neutral` | tone on the frame — bins, status text and a gauge in the same frame all move together |
 | `.mob-meter--positive` `--negative` `--warning` `--info` `--neutral` | tone on one mark |
 
-`[data-mob-tone]` is equivalent to each tone modifier on both blocks, and works on a **single
-bin** too, for a distribution whose buckets mean different things (in-range / out-of-range,
-pass / fail). A bin may also carry `[data-mob-series]`.
+`[data-mob-tone]` is equivalent to tone modifiers on the frame and meter. On an **individual
+bin**, CSS supports `positive|success`, `negative|error`, and `neutral`; use those only when buckets
+carry status meaning. A bin may also carry `[data-mob-series]`.
 
 Neutral has **no glow**: a glow is emphasis, and neutral is the absence of it.
 
@@ -2335,14 +2346,14 @@ a `title` or `aria-label` to stay usable.
 
 ## 22. Tabs
 
-**The dominant variant is `--underline`.** Use it unless you have a reason not to: it is the
+**The dominant variant is `--underline`.** Add `.mob-tabs--underline` explicitly unless you have a reason not to: it is the
 only one that adds no surface, no border and no radius to the page, which is what keeps a tab
 strip from reading as a row of independent buttons. Reach for the others only when the strip
 must survive without a baseline to sit on.
 
 | Variant | When |
 |---|---|
-| `.mob-tabs--underline` | the default. The list carries the baseline; the indicator sits on top of it. No hover background — tone alone separates the states, which is what stops five tabs from looking like five ghost buttons. |
+| `.mob-tabs--underline` | explicit standard variant. The list carries the baseline; the indicator sits on top of it. No hover background — tone alone separates the states, which is what stops five tabs from looking like five ghost buttons. |
 | `.mob-tabs--contained` | a plate inside a sunken trough. Use when the strip floats in a card header with no full-width edge to underline. 34 tab + 2 + 2 trough padding + 1 + 1 border = **40px, exactly control L**, so the strip lines up with a button beside it. |
 | `.mob-tabs--pill` | loose standalone filters — a 15% accent wash under primary text. The least tab-like of the three; do not use it for primary page-level navigation. |
 | `.mob-tabs--scroll` | horizontal overflow for narrow columns and phones. The edge fade is a symmetric mask, so it is RTL-safe; the scrollbar is hidden because the fade is the affordance. |
@@ -2625,10 +2636,9 @@ the load. There is no CSS way to reserve visual space without contributing intri
 Avoid it in markup: give a row that can go busy a `__shortcut` or `__trailing`, or give the
 menu an explicit `--mob-menu-w`.
 
-**Tap targets.** `base.css`'s coarse-pointer floor names `.mob-menu-item`, which no component
-file ships; the overlay row is `.mob-menu__item` and its own `min-block-size` is
-`--mob-control-h-sm` (30px). On a touch surface raise `--mob-menu-item-h` to
-`--mob-tap-target` on the menu.
+**Tap targets.** On coarse pointers, `overlay.css` raises `.mob-menu__item` to the shared
+`--mob-tap-target` floor. It grows the real row so the loading spinner keeps ownership of
+`::after` and adjacent targets cannot overlap.
 
 ```html
 <div class="mob-menu mob-menu--selectable" role="menu" aria-label="Row actions"

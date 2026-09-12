@@ -166,7 +166,7 @@ Title      Close this position?
 Body       Closing withdraws all liquidity and stops fee accrual.
            Unclaimed fees of $0.2194 are claimed to your wallet.
 Cancel     Cancel
-Confirm    Close position          ← --mob-destroy-* tone, verb repeated
+Confirm    Close position          ← .mob-btn--danger, verb repeated
 ```
 
 | Good | Bad | Why |
@@ -176,7 +176,7 @@ Confirm    Close position          ← --mob-destroy-* tone, verb repeated
 | `Cancel` | `No, take me back` | Chatty; and it is the low-emphasis button, so it should be the quietest word available. |
 | `Closing withdraws all liquidity.` | `This action cannot be undone.` | Says *what* is lost, not just that something is. Keep the irreversibility line only if the consequence sentence does not already imply it. |
 
-- **The confirm button carries the destructive tone** (`--mob-destroy-fg` / `-bg` / `-border`),
+- **The confirm button carries the strong destructive variant** (`.mob-btn--danger`),
   muted at rest, saturating on hover — the intent reads without the dialog glowing.
 - **Never make the destructive button the default focus target.** Focus goes to Cancel.
 - **State the quantity.** `Delete 3 alerts` beats `Delete alerts`: it is a last chance to notice
@@ -238,7 +238,7 @@ Rendering rules live in `07-data-formatting.md`. These are the sentence-level on
   digit is scanned, and the spelled form breaks that.
 - **Never start a sentence with a numeral** — rewrite so it does not need to.
 - **Pluralise from the count, always.** The prototype ships `1 ladder` in one place and
-  `1 ladders · 1 rungs` in another `[src]` — the second is a string built by appending `s`, and it
+  `1 ladder · 1 rung` in another `[src]` — plural forms must come from the product's locale formatter, not by appending `s`, and it
   is the single most visible copy bug in the handoff. Take a plural function or an ICU message; a
   count and a noun are never concatenated by hand.
 - **Prefer `1 rung` / `2 rungs` over `1 rung(s)`.** Parenthetical plurals are a note to the reader

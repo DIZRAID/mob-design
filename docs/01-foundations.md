@@ -47,7 +47,7 @@ declarations and the product is rebranded, with every component following automa
 that reaches past tier 2 to `--mob-violet-500` is invisible to that swap, so it stays violet in an
 orange product and nobody notices until a customer does. The same argument applies with more force to
 a literal hex inside a component stylesheet: it is a token that cannot be found by grep and cannot be
-overridden by a theme. Treat one as a bug (see `docs/08-adoption.md`, "Hygiene").
+overridden by a theme. Treat one as a bug (see `docs/09-adoption.md`, "Hygiene").
 
 **Why tier 3 exists at all.** A dense product surface produces measured values that do not land on
 any spacing scale: card padding of `15px 16px`, chip padding of `3px 8px`, an avatar overlap of
@@ -1011,8 +1011,8 @@ reader.
 | `--mob-duration-instant` | 80ms | Press feedback |
 | `--mob-duration-fast` | 120ms | Hover on a control |
 | `--mob-duration-normal` | 160ms | Hover on a card, tone changes, most state transitions |
-| `--mob-duration-slow` | 220ms | Popover / dropdown enter |
-| `--mob-duration-enter` | 260ms | Modal enter |
+| `--mob-duration-slow` | 220ms | Reserved slower state step and composed ambient timing |
+| `--mob-duration-enter` | 260ms | Toast/page/section reveal and ambient timing base |
 | `--mob-ease-standard` | `cubic-bezier(.2, 0, 0, 1)` | Default. State changes both directions. |
 | `--mob-ease-enter` | `cubic-bezier(.16, 1, .3, 1)` | Things arriving |
 | `--mob-ease-exit` | `cubic-bezier(.4, 0, 1, 1)` | Things leaving |
@@ -1025,7 +1025,8 @@ arrives rather than like it stops.
 
 ### The transform/opacity-only policy
 
-**Animate `transform` and `opacity`. Nothing else.**
+**Animate geometry with `transform` and `opacity`.** Paint-only transitions such as colour and
+background are part of the normal state vocabulary.
 
 Three reasons, in order of how often they bite:
 
@@ -1116,11 +1117,10 @@ is the preferred posture.
 - Primary actions expand to available width where that reads as the main action of the view.
 - Complex navigation becomes a menu or drawer.
 - Section rhythm tightens automatically (the `max-width: 767px` block in `tokens.css`).
-- **Touch targets reach 44px** — `--mob-tap-target`. `base.css` enforces this under
-  `@media (pointer: coarse)` with a centred `::after` pseudo-element on `.mob-btn`, `.mob-icon-btn`,
-  `.mob-tab` and `.mob-menu-item`, so the *hit area* grows to 44px without the control's painted size
-  changing. This is why a 30px S button is still legal on mobile: it looks 30px and it is 44px to a
-  thumb.
+- **Touch targets reach 44px** — `--mob-tap-target`. Under `@media (pointer: coarse)`, buttons and
+  tabs use a centred pseudo-element without changing their painted size. `.mob-menu__item` and
+  interactive chips grow their real layout box to 44px so their loading pseudo-elements remain
+  available and adjacent invisible hit areas never overlap.
 - Avoid tiny two-column cards unless the content genuinely supports them. Two 10px numbers side by
   side on a 375px screen are two unreadable numbers.
 

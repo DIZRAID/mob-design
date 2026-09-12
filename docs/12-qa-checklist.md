@@ -136,9 +136,9 @@ indistinguishable from a broken meter.
 - [ ] **Every colour a component reads is semantic or component tier**, never a `--mob-gray-*`,
       `--mob-violet-*` or other primitive. Primitives are the palette's private storage; a component
       that reads one cannot be rethemed by redefining the semantic block.
-- [ ] **Distinct background colours in the screen ≤ 5** (canvas, sunken, surface, surface-raised /
-      tile, hover). A sixth surface is a finding: depth in this system comes from four elevation
-      steps plus a 1px border, and a fifth background means someone invented a level.
+- [ ] **Inspect distinct computed backgrounds.** The design vocabulary is small, but transparent
+      elements, status tints, hover states and browser serialization make a raw count unsuitable as
+      an automatic pass/fail rule. Use the probe to locate unexpected surfaces.
       ```js
       new Set([...document.querySelectorAll('body *')].map(e => getComputedStyle(e).backgroundColor))
       ```
@@ -150,8 +150,8 @@ indistinguishable from a broken meter.
 - [ ] **Hairlines between fused segments are 1px gaps over a `--mob-bg-frame` parent, not borders.**
       Test: the seam is exactly 1px at every zoom level and does not double where two segments meet.
       A doubled 2px seam means someone used `border` on both sides.
-- [ ] **Every text size is a step on the scale.** Expect an empty result, except elements carrying a
-      `.mob-display-*` or `.mob-heading-xl` class, which are fluid `clamp()` by design.
+- [ ] **Inspect text sizes against role classes.** Fluid `clamp()`, zoom and browser rounding mean
+      the probe is investigative; a hit is not automatically a defect.
       ```js
       const ok = new Set(['9.5px','10px','10.5px','11.5px','12px','12.5px','13px','14px','14.5px',
                           '16px','18px','22px','23px','27px','32px','40px','48px','64px','80px']);
@@ -192,7 +192,7 @@ indistinguishable from a broken meter.
         return props.some(p => s[p] && s[p] !== 'normal' && !ok.has(s[p]));
       });
       ```
-- [ ] **Radius tracks control height, not taste.** S=`--mob-radius-sm` (8px), M=`--mob-radius-md`
+- [ ] **Inspect whether radius tracks control height and role.** S=`--mob-radius-sm` (8px), M=`--mob-radius-md`
       (9px), L=`--mob-radius-lg` (10px), chips=`--mob-radius-xs` (6px), cards and modals=
       `--mob-radius-xl` (12px), data marks=`--mob-radius-2xs` (3px). A control that sets its own
       radius is a fail — change its size step instead.
@@ -306,9 +306,9 @@ indistinguishable from a broken meter.
       not "OK", "Submit", "Click here", "Learn more about…". Test: read the label out of context; if
       you cannot say what will happen, it fails.
 - [ ] **No filler.** "Please", "kindly", "simply", "just", "exciting", "seamlessly" appear nowhere.
-- [ ] **Every number is mono and tabular.** `font-variant-numeric: tabular-nums` is inherited from
-      `body`; a component that resets `font-family` on a number breaks column alignment in every
-      table below it.
+- [ ] **Numbers through 16px are mono and tabular; standalone figures from 22px are sans 600 with
+      tabular numerals.** A digit inside sans body copy is prose, not a figure. Check role and
+      meaning rather than matching every text node containing a digit.
 - [ ] **One compact-format convention product-wide.** Either `$24.8K` / `$3.21M` or `$24,800.00`,
       never both in one screen, and never both for the same quantity in two places.
 - [ ] **Precision is consistent down a column.** `$4,800.09` and `$3,206.85` may share a column;
@@ -451,12 +451,12 @@ text on a card. Values against `--mob-bg-canvas` are marginally higher.
       ```js
       [...document.querySelectorAll('[aria-live],[role="status"],[role="alert"]')]
       ```
-- [ ] **Touch targets ≥ 44×44 at `pointer: coarse`.** base.css grants the floor to `.mob-btn`,
-      `.mob-icon-btn`, `.mob-tab`, `.mob-menu-item` and `.mob-chip[data-mob-interactive]`. Anything
-      interactive outside that list needs its own, without changing its painted size.
+- [ ] **Touch targets ≥ 44×44 at `pointer: coarse`.** base.css expands `.mob-btn`,
+      `.mob-icon-btn` and `.mob-tab`; component CSS grows the real `.mob-menu__item` and interactive
+      chip boxes. Anything outside that list needs its own non-overlapping target strategy.
 - [ ] **200% browser zoom loses no content and introduces no horizontal scroll.**
 - [ ] **A destructive action confirms before executing**, and the confirmation names what will be
-      destroyed. The confirm button carries the destructive tone; the cancel is the default focus.
+      destroyed. The confirm button uses `.mob-btn--danger`; the cancel is the default focus.
 
 ---
 

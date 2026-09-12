@@ -126,9 +126,9 @@ Rules that make the chain worth having:
   allows; where it does not, catch it in the publish checklist (§13).
 - **A layer fill is never a raw hex.** Figma's *Selection colors* panel on a whole page should list
   variables and nothing else. One hex is one drift.
-- **Component tokens exist only where the CSS has one.** Do not create `Component/Button/Background`
-  because it feels symmetrical; the button reads `--mob-accent` directly. An extra indirection in
-  Figma that the CSS does not have is a place for the two to disagree.
+- **Figma component tokens mirror the three JSON token files.** CSS components also use local knobs
+  such as `--mob-btn-bg`, but those implementation variables are intentionally absent from JSON and
+  Figma. Do not create `Component/Button/Background` only because the local CSS name exists.
 
 ### 2.4 Primitive / Color — what to build
 
@@ -858,10 +858,8 @@ way to say which is wrong.
                        anything that does NOT update was bound to a raw hex — fix it
 ```
 
-The `mob-design/tokens/` directory is the intended exchange point. If it is currently empty, the sync
-is manual: build the collections from §4–§6 by hand and re-check them against `tokens.css` at each
-publish. Generating that export is the single highest-leverage piece of tooling this system can have,
-because it turns step 3–4 from a careful human transcription into a diff.
+The three files in `mob-design/tokens/` are the exchange point. Import them as one namespace and run
+`npm run check` before publishing; the verifier compares them with `tokens.css` in both directions.
 
 **Never** the reverse: do not change a value in Figma and ask an engineer to match it. File it
 against `tokens.css`. A Figma-first change has no provenance marker, no review, and no record of

@@ -14,7 +14,7 @@ Every pattern here is stated as: what it is → when to use it → anatomy → r
   `.mob-truncate`, `[data-mob-sign]` are real, verified classes. Use them instead of
   setting `font-size` on a pattern.
 - **Control classes** referenced here — `.mob-btn`, `.mob-icon-btn`, `.mob-chip`,
-  `.mob-tab`, `.mob-menu-item` — are the system's component classes. **Modifiers are
+  `.mob-tab`, `.mob-menu__item` — are the system's component classes. **Modifiers are
   classes**: `.mob-btn--primary`, `.mob-btn--ghost`, `.mob-btn--sm`. There is no
   `data-mob-variant` or `data-mob-size` attribute anywhere in the CSS; see
   `02-components.md` for the authoritative modifier API.
@@ -151,7 +151,7 @@ level with a rail beside it.
     <main class="mob-main" data-mob-density="product">
       <div class="mob-column-header">
         <span class="mob-column-header__title">Open positions</span>
-        <span class="mob-column-header__chip"><span class="mob-chip">1 ladders · 1 rungs</span></span>
+        <span class="mob-column-header__chip"><span class="mob-chip">1 ladder · 1 rung</span></span>
         <span class="mob-column-header__spacer"></span>
         <span class="mob-column-header__meta">updated 3s ago</span>
         <span class="mob-column-header__actions">
@@ -193,7 +193,7 @@ mob-column-header
 
 | Rule | Why |
 |---|---|
-| The chip qualifies the title; it does not restate it | "Open positions" + "1 ladders · 1 rungs" is scope. "Open positions" + "Positions" is noise. |
+| The chip qualifies the title; it does not restate it | "Open positions" + "1 ladder · 1 rung" is scope. "Open positions" + "Positions" is noise. |
 | Exactly one primary per header | Two primaries means the header has not decided what the page is for. Demote one to ghost. |
 | Metadata sits left of the actions, not right | Actions anchor the right edge across every page in the product; metadata is variable-length and would push them around. |
 | Header height = `--mob-column-header-h` (which reads `--mob-header-row-h`, 34px); the title is vertically centred, not baseline-aligned to the chip | Chips and buttons have different optical baselines. Centring is the only alignment that survives all three being present or absent. |
@@ -512,7 +512,7 @@ what do I do about it*. A row that puts actions in the middle forces a second pa
     </div>
     <div class="mob-truncate">
       <div class="mob-heading-sm mob-nowrap">NUDES / USDG</div>
-      <div class="mob-meta-sm mob-tone-muted mob-nowrap">V4 · 0.90% · 1 rungs</div>
+      <div class="mob-meta-sm mob-tone-muted mob-nowrap">V4 · 0.90% · 1 rung</div>
     </div>
   </div>
 
@@ -836,7 +836,7 @@ mob-modal-backdrop            scrim + centring layer, --mob-z-modal-backdrop
     │                         (typed confirm field lives here, highest tier only)
     └── mob-modal__footer     pinned, 1px divider
         ├── Cancel            ghost         ← receives initial focus
-        └── Confirm           destroy tone  ← repeats the verb
+        └── Confirm           danger variant ← repeats the verb
 ```
 
 Open/closed is one attribute, `data-mob-state="open" | "closed"`, on the overlay — no
@@ -850,11 +850,11 @@ Open/closed is one attribute, `data-mob-state="open" | "closed"`, on the overlay
 | The title names the object: "Close NUDES / USDG position" | "Are you sure?" tells the user nothing they did not already know and gives them nothing to check. |
 | The body states the consequence with the real numbers: "Withdraws $31.12 of liquidity and claims $0.2194 in fees. This cannot be undone." | The whole value of a confirm dialog is the chance to notice you are on the wrong row. Generic copy removes that chance. |
 | The confirm button repeats the verb — "Close position", never "OK" / "Yes" / "Confirm" | Users read buttons, not bodies. The button must be self-sufficient. |
-| The confirm button uses the **destroy** tone, not the primary accent | Accent means "the thing you came here to do". Destruction is not that, and rendering it in brand violet makes it the most attractive target on screen. |
+| The confirm button uses `.mob-btn--danger`, not the primary accent or muted row-level `--destroy` variant | A high-consequence confirmation needs the strong destructive treatment; `--destroy` is for inline Close/Remove actions. |
 | Initial focus goes to **Cancel** | Enter must never destroy. |
 | Escape cancels. Backdrop click cancels only when nothing has been typed | Losing a typed confirmation to a stray click is worse than one extra click. |
 | Focus is trapped in the dialog and returns to the triggering control on close | |
-| On success, remove the row with `opacity` + `height` over `--mob-duration-normal`; do not refetch the page | A full refetch loses scroll position and makes a 160ms action feel like a second. |
+| On success, fade/translate the row, then update normal layout; preserve the app's cache/refetch contract | Geometry is not animated. Keep scroll position when the host data layer allows it, but do not bypass its consistency rules. |
 | Do not confirm something you could give undo instead | Every unnecessary dialog makes the necessary ones less effective. |
 
 ```html
@@ -873,7 +873,7 @@ Open/closed is one attribute, `data-mob-state="open" | "closed"`, on the overlay
     </div>
     <footer class="mob-modal__footer">
       <button class="mob-btn mob-btn--ghost" autofocus>Cancel</button>
-      <button class="mob-btn mob-btn--destroy">Close position</button>
+      <button class="mob-btn mob-btn--danger">Close position</button>
     </footer>
   </div>
 </div>
@@ -920,7 +920,7 @@ row. Claiming fees, marking read, archiving, starring, toggling a flag, reorderi
 
 ```html
 <!-- rest -->
-<button class="mob-btn" data-mob-variant="affirm" data-mob-size="sm">Claim</button>
+<button class="mob-btn mob-btn--affirm mob-btn--sm">Claim</button>
 
 <!-- in flight: width preserved, label swapped, row still usable -->
 <button class="mob-btn mob-btn--affirm mob-btn--sm"
@@ -1081,7 +1081,7 @@ Derived from the poll interval `P` rather than from absolute seconds, so a 2s po
 ```html
 <div class="mob-column-header">
   <span class="mob-column-header__title">Open positions</span>
-  <span class="mob-column-header__chip"><span class="mob-chip">1 ladders · 1 rungs</span></span>
+  <span class="mob-column-header__chip"><span class="mob-chip">1 ladder · 1 rung</span></span>
   <span class="mob-column-header__spacer"></span>
 
   <!-- fresh -->

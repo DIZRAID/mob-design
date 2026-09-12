@@ -1,186 +1,109 @@
-# mob-design — брифинг для агента
+# mob-design agent contract
 
-Этот файл целиком кладётся в контекст (≈3k токенов). Остальные доки — по требованию,
-по одному, под конкретную задачу. Не читай `docs/` целиком: там ~119k токенов.
+`mob-design` is a CSS system for dense product and editorial interfaces. It is not an
+application or a behavior library. It defines tokens, classes, states, themes, and compositions;
+the host application retains its routes, data, handlers, formatting, and accessible widget behavior.
 
-Система подключена. Пиши разметку под неё, а не свой CSS.
+## Start by understanding the task
 
----
+When changing this repository, treat `css/*.css` as the source of truth and run `npm run check`
+and `npm test`.
 
-## Если системы ещё нет в проекте
+When applying the system to an existing application:
 
-Канонический источник — приватный репозиторий `DIZRAID/mob-design`. Подключается сабмодулем,
-чтобы правки приходили централизованно, а не расползались копиями:
+1. Find the stack, the global style entry point, and shared UI wrappers.
+2. Preserve routes, handlers, requests, authentication, data precision, locale, and headless
+   component behavior. Presentation may change; the product contract must remain intact.
+3. Choose the integration depth: use `css/mob.css` for a separate application or a deliberate
+   global migration; use `tokens.css` with `roles.css` for incremental adoption without the global
+   reset and base rules.
+4. Convert one shared component and one pilot screen, verify them in a browser, then expand.
+5. Before delivery, audit the changed source and run the application's native checks.
+
+See [`docs/agent-workflow.md`](docs/agent-workflow.md) for the complete workflow.
+
+## Find the API instead of guessing
 
 ```bash
-git submodule add https://github.com/DIZRAID/mob-design.git mob-design
-cp mob-design/AGENTS.md ./CLAUDE.md
+node mob-design/scripts/mob.mjs find button
+node mob-design/scripts/mob.mjs find .mob-card
+node mob-design/scripts/mob.mjs find --mob-bg-surface --json
 ```
 
-Разово, без истории — `git clone --depth 1`. Обновить позже — `git submodule update --remote`.
+The command reads live CSS and Markdown on every run. Use `docs/02-components.md` for exact
+component APIs, `docs/01-foundations.md` for tokens, `docs/03-patterns.md` for compositions, and
+`docs/09-adoption.md` for integration.
 
-**Клонируй, а не тяни файлы по HTTP.** Локально ты можешь искать по всей системе одной командой,
-и это на порядок эффективнее, чем запрашивать доки по одному:
+## Integration
 
-```bash
-grep -rn "mob-btn--" mob-design/css/components/button.css   # точный API компонента
-grep -rn "mob-meter" mob-design/docs/02-components.md        # как им пользоваться
-```
-
-Репозиторий приватный — доступ идёт через `gh`/`git` с токеном пользователя. Веб-фетч по ссылке
-вернёт 404, это ожидаемо, не пытайся обойти.
-
----
-
-## Железные правила
-
-1. **Не пиши цвета.** Никаких hex, `rgb()`, `hsl()` в коде проекта. Только `var(--mob-*)`.
-   Нужен оттенок, которого нет — `color-mix(in oklab, var(--mob-accent) 14%, var(--mob-bg-canvas))`.
-2. **Не пиши размеры «на глаз».** font-size, radius, duration, z-index, отступы — только токены.
-3. **Не создавай новый компонент, если есть класс.** Сначала проверь: `grep -r "mob-<что-то>" mob-design/css/components/`.
-4. **Не трогай примитивы** (`--mob-gray-*`, `--mob-violet-*`, `--mob-green-*` и т.п.) в коде.
-   Они существуют только внутри токен-слоя. Использование примитива ломает light mode.
-   В компонентах — только семантические токены (`--mob-bg-surface`, `--mob-fg-primary`, …).
-5. **Состояния — не классы.** Никаких `.is-active`. Используй нативное и атрибуты:
-   `:hover`, `:focus-visible`, `:disabled`, `[aria-current]`, `[aria-selected]`, `[aria-expanded]`,
-   `data-mob-selected`, `data-mob-loading`, `data-mob-invalid`, `data-mob-open`, `data-mob-sign`.
-6. **Анимируй только `transform` и `opacity`.** Никогда width/height/top/left/margin.
-   Никакого сдвига макета на hover. Нажатие — `scale(var(--mob-press-scale))`.
-7. **`:focus-visible` обязателен** у всего интерактивного. Прототип его не имел — система имеет.
-8. **Кнопка — это `<button>`, ссылка — `<a>`.** Иконочная кнопка обязана иметь `aria-label`.
-
----
-
-## Что подключить
+Full bundle:
 
 ```css
 @layer mob, app;
-@import url('mob-design/css/mob.css') layer(mob);
+@import url('./mob-design/css/mob.css') layer(mob);
 ```
 
-```html
-<html data-mob-theme="dark" data-mob-density="product">
+Incremental roles:
+
+```css
+@import url('./mob-design/css/tokens.css');
+@import url('./mob-design/css/roles.css');
 ```
 
-`data-mob-density` — `marketing` | `product` | `data`. Двигает ритм секций и паддинги карточек,
-**не** трогает геометрию контролов. Ставится на любой контейнер, не только на `<html>`.
+The full bundle includes the reset and global body, link, focus, and scrollbar styles. Incremental
+roles leave global styling to the host; selectively imported component CSS requires host control
+normalization and a visible `:focus-visible` policy.
 
-Опционально, после `mob.css`: `css/brand.css` (ребренд одним hex через `--mob-brand`),
-`css/a11y.css` (AA-хардening, включается `data-mob-a11y="AA"`).
+Set the theme on `<html data-mob-theme="dark|light">` in most products. Semantic aliases resolve
+where they are declared, so an arbitrary nested theme switch is not guaranteed to recompute them.
+Density `marketing|product|data` may live on a container; a root value sets the baseline.
 
-Шрифты подключаешь сам: IBM Plex Mono 400/500/600 + системный sans.
+## Hard rules
 
----
+- Do not write arbitrary colors, sizes, radii, durations, or z-index values in UI. Find a token.
+- Do not use raw `--mob-gray-*`, `--mob-violet-*`, `--mob-green-*`, `--mob-red-*`,
+  `--mob-amber-*`, or `--mob-blue-*` palette tokens in application code.
+- A literal brand or theme color belongs only in a theme layer with a line-scoped
+  `mob-lint-ok: reason` comment. Check contrast on the rendered screen.
+- A chart instance or layout may pass data through local custom properties. Those values do not
+  become system tokens.
+- Search for an existing `.mob-*` class first. A new component or token is a system decision.
+- Variants and sizes use classes such as `.mob-btn--primary` and `.mob-btn--sm`, not
+  `data-mob-variant` or `data-mob-size`.
+- State uses native attributes, ARIA, and documented `data-mob-*` hooks. A presence attribute with
+  the string value `"false"` still matches CSS; omit it instead.
+- Animate geometry with `transform` and `opacity`. Paint properties such as color may transition;
+  do not animate width, height, inset, or margin.
+- A button remains a `<button>` and a link remains an `<a>`. Icon-only buttons need a name.
+- Do not replace host data, formatting, or product logic with examples from these docs.
+- Do not copy pieces of system CSS into the application. Import the source and override public
+  tokens or hooks in the application's own layer.
 
-## Типографика — главное правило системы
+## Working vocabulary
 
-Две гарнитуры по роли, не по вкусу:
+Structure: `.mob-page`, `.mob-shell`, `.mob-stack`, `.mob-cluster`, `.mob-grid`, `.mob-section`.
 
-- **Mono** — каждое число, лейбл контрола, тег, таймстемп, адрес, метаданные. Это дефолт `<body>`.
-- **Sans 600 / -0.02em** — заголовки от 14px, и **цифры от 22px**.
+Controls: `.mob-btn`, `.mob-icon-btn`, `.mob-field`, `.mob-input`, `.mob-textarea`,
+`.mob-select`, `.mob-checkbox`, `.mob-radio`, `.mob-toggle`.
 
-Перелом у цифр: **до 16px включительно — mono, от 22px — sans.** 16px метрика остаётся mono,
-чтобы выравниваться в колонке; 22px становится sans, потому что читается как заголовок.
+Surfaces and data: `.mob-card`, `.mob-chip`, `.mob-list-row`, `.mob-stat`, `.mob-table`,
+`.mob-meter`, `.mob-spark`, `.mob-delta`.
 
-Классы ролей (из `base.css`, не выдумывай размеры):
+Typography: `.mob-heading-*`, `.mob-title`, `.mob-figure-*`, `.mob-body*`, `.mob-value*`,
+`.mob-meta*`, `.mob-label`, `.mob-tone-*`.
 
-```
-.mob-display-xl/-lg/-md   .mob-heading-xl/-lg/-md/-sm   .mob-title
-.mob-figure-xl/-lg/-md    .mob-figure-sm (mono!)
-.mob-body-lg/.mob-body/.mob-body-sm
-.mob-value .mob-value-sm .mob-meta .mob-meta-sm .mob-dim .mob-label
-.mob-tone-primary/-secondary/-muted/-label/-dim/-accent/-positive/-negative/-warning/-info
-```
-
-Знаковые числа: `<span data-mob-sign="positive|negative|neutral">` — тон привязан к данным.
-
----
-
-## Карта классов (606 всего; здесь — рабочий минимум)
-
-**Каркас** `.mob-page` `.mob-shell` `.mob-rail` `.mob-main` `.mob-column-header`
-`.mob-stack` `.mob-cluster` `.mob-grid` `.mob-section` `.mob-divider`
-
-**Контролы** `.mob-btn` + `--primary|--secondary|--ghost|--quiet|--affirm|--destroy|--danger`,
-размеры `--sm|--lg` (голый = M), `--block` `--pill` · `.mob-icon-btn` · `.mob-btn-group`
-
-> `--destroy` — приглушённая деструктивная кнопка **в строке** (Close/Remove).
-> `--danger` — громкая, для подтверждения в модалке. Не путай.
-> `--affirm` — приглушённая «забрать деньги» (Claim/Collect).
-
-**Формы** `.mob-field` (обёртка) `.mob-input` `.mob-textarea` `.mob-select` `.mob-search`
-`.mob-checkbox` `.mob-radio` `.mob-toggle` `.mob-segmented-control` `.mob-kbd`
-
-**Поверхности** `.mob-card` + `--interactive|--selected|--featured|--sunken|--dashed|--flush|--pad-sm|--pad-lg`
-`.mob-list-row` `.mob-avatar` `.mob-avatar-stack` `.mob-chip` + `--accent|--positive|--negative|--warning|--info|--sm|--solid|--removable`
-
-**Данные** `.mob-stat` + `--sm|--lg|--xl|--positive|--negative` · `.mob-stat-pair` · `.mob-table`
-`.mob-meter` `.mob-bar-stack` `.mob-spark` `.mob-delta` `.mob-legend` `.mob-progress`
-
-**Навигация** `.mob-navbar` `.mob-navlink` `.mob-sidebar` `.mob-tabs` `.mob-tab` `.mob-breadcrumbs`
-
-**Слои** `.mob-tooltip` `.mob-popover` `.mob-menu` `.mob-modal` `.mob-drawer`
-
-**Статусы** `.mob-toast` `.mob-alert` `.mob-banner` `.mob-empty` `.mob-error-state`
-`.mob-skeleton` `.mob-spinner`
-
-Активного состояния таба нет как класса — это `aria-selected="true"`.
-Текущей ссылки нет как класса — это `aria-current="page"`.
-
----
-
-## Фирменная конструкция: `.mob-segmented`
-
-Слитая карточка-строка. Волосяные линии между сегментами — это **зазоры 1px**, сквозь которые
-видно фон родителя, а не бордеры. Поэтому не бывает двойных линий и строка не переполняет колонку.
-
-```html
-<div class="mob-segmented">
-  <div class="mob-segmented__seg" style="--mob-seg-basis:252px; --mob-seg-min:252px">…</div>
-  <div class="mob-segmented__seg mob-segmented__seg--wide">…</div>
-  <div class="mob-segmented__seg mob-segmented__seg--actions">…</div>
-</div>
-```
-
-Следствия: на рамке не бывает padding; сегменты обязаны быть непрозрачными; `overflow:hidden`
-обрезает наружные кольца фокуса. Порядок сегментов: идентичность → визуализация → метрики → действия.
-
----
-
-## Куда смотреть под задачу
-
-| Задача | Файл |
-|---|---|
-| Точный API компонента, все классы и состояния | `docs/02-components.md` (большой — читай нужную секцию) |
-| Значение токена, контраст, шкалы | `docs/01-foundations.md` |
-| Собрать экран из готовых композиций | `docs/03-patterns.md` |
-| Скелет страницы под тип продукта | `docs/04-templates.md` |
-| Подключение, ребренд, интеграция с фреймворком | `docs/09-adoption.md` |
-| Анимации | `docs/05-motion.md` |
-| Доступность | `docs/06-accessibility.md` |
-| Форматирование чисел, адресов, дат | `docs/07-data-formatting.md` |
-| Тексты интерфейса, ошибки, пустые состояния | `docs/08-content-style.md` |
-| Что нельзя делать и почему | `docs/10-anti-patterns.md` |
-| Проверка перед сдачей | `docs/12-qa-checklist.md` |
-
-Живой стайлгайд: `showcase/index.html` (открывать через http-сервер, не `file://`).
-
----
-
-## Проверка перед сдачей
+## Verify the consumer
 
 ```bash
-# литеральные цвета в своём коде — должно быть пусто
-grep -rnE '#[0-9a-fA-F]{3,8}\b|\brgb\(|\bhsl\(' src/ --include=*.css --include=*.tsx
-
-# утечки примитивов — должно быть пусто
-grep -rnE 'var\(--mob-(gray|violet|green|red|amber|blue)-' src/
+node mob-design/scripts/mob.mjs audit src
 ```
 
-Плюс: у каждого интерактивного элемента есть `:focus-visible`; у каждой поверхности с данными
-есть состояния empty / loading / error; ничего не прыгает на hover; экран открыт на 375px без
-горизонтального скролла.
+The audit is heuristic. It reliably checks literal classes and ordinary static styles, while
+dynamic class expressions and JavaScript or TypeScript semantics still need human review. After
+the audit, open real routes at narrow and wide widths, test keyboard navigation and the
+empty/loading/error/disabled states, and confirm that application behavior is unchanged.
 
-**Признак готовности:** новый экран собирается из токенов, ролей типографики и существующих
-классов — без единого произвольного значения. Если произвольные значения нужны постоянно —
-это дыра в системе, её надо заводить как задачу, а не заинлайнивать.
+When using a git submodule, pin a verified commit and do not update it blindly.
+`node mob-design/scripts/mob.mjs init .` adds this contract to an existing `AGENTS.md` while
+preserving its current instructions. It does not edit `CLAUDE.md`, framework configuration,
+application source, or dependencies.

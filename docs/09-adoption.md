@@ -58,15 +58,14 @@ imports.
 @import url('../mob-design/css/brand.css')  layer(mob.brand);   /* optional */
 @import url('../mob-design/css/a11y.css')   layer(mob.a11y);    /* optional */
 @import url('../mob-design/css/base.css')   layer(mob.base);
+@import url('../mob-design/css/components/motion.css') layer(mob.base);
 
 /* Then the component layer — import the files you use. */
 @import url('../mob-design/css/components/button.css')   layer(mob.components);
 @import url('../mob-design/css/components/layout.css')   layer(mob.components);
 @import url('../mob-design/css/components/nav.css')      layer(mob.components);
 @import url('../mob-design/css/components/feedback.css') layer(mob.components);
-/* …and any other file in css/components/. Plain CSS has no glob; if listing
-   them is tedious, let your bundler expand the folder instead:
-   @import 'mob-design/css/components/*.css';   (Sass / vite-plugin-glob)      */
+/* …and list each additional component file you use explicitly. */
 ```
 
 Why this order:
@@ -83,8 +82,10 @@ Why this order:
 
 The `@layer` line is optional but recommended. Custom properties resolve at computed-value time, so
 a component file can reference a token declared later in the source — but *element* rules do not
-have that luxury. Layers make the win order explicit instead of implicit in file order, and they
-guarantee your app CSS beats the system without specificity escalation.
+have that luxury. Layers make the win order explicit instead of implicit in file order. Normal
+declarations in the later `app` layer beat normal system declarations; `!important` reverses layer
+precedence, and unlayered legacy CSS beats normal layered CSS. Audit those two cases instead of
+treating a layer as isolation.
 
 One non-obvious property of `tokens.css`: it is almost inert. It declares custom properties and
 nothing else — except `color-scheme: dark` on `:root`. That single declaration changes how the
@@ -114,13 +115,14 @@ set(); m.addEventListener('change', set);
 <html lang="en" data-mob-theme="dark" data-mob-a11y="AA">
 ```
 
-It is a token override, so it scopes like any other — put it on a `<section>` to harden one region
-instead of the product. `docs/06-accessibility.md` §1 carries the measured ratios; 2.1 below covers
+Use AA hardening at the same root that owns the active theme. Some root aliases are computed where
+they are declared, so nesting theme-like overrides under an arbitrary section is not a general
+re-theming mechanism. `docs/06-accessibility.md` §1 carries the measured ratios; 2.1 below covers
 the one that bites a rebrand first. Without the attribute the file is inert, which is why importing
 it costs nothing.
 
-`data-mob-density` goes on **sections, not on `<html>`** — it is a subtree property, and a real
-product uses more than one zone per page.
+`data-mob-density` is a subtree property. Put the baseline on `<html>` or the app root, then override
+individual sections when one page mixes zones.
 
 ```html
 <main data-mob-density="product">
@@ -275,11 +277,11 @@ temperature choice.
 <html lang="en" data-mob-theme="light">
 ```
 
-Use CSS only when you cannot control the root element — for example a widget embedded in someone
-else's page. Then invert the default without touching the dark block:
+If the host controls the root only through CSS, reproduce the documented light semantic mapping in
+the host theme layer after mob-design:
 
 ```css
-:root:not([data-mob-theme='dark']) {
+:root {
   color-scheme: light;
   --mob-bg-canvas:  #f7f8fa;
   --mob-bg-surface: #ffffff;
@@ -288,8 +290,9 @@ else's page. Then invert the default without touching the dark block:
 }
 ```
 
-`:root:not([…])` outranks the bare `:root` defaults, and an explicit `data-mob-theme="dark"` still
-wins because the selector stops matching.
+An embedded widget that does not control the document root should inherit the host theme or receive
+an explicit semantic token map at its boundary. Do not recolor the document `:root` as a widget
+workaround, and do not assume moving `data-mob-theme` to the widget recomputes every root alias.
 
 Honest caveat: the entire light block is **[drv]**. It is a faithful role inversion — same
 hierarchy, same restraint, same accent — but it has never been measured on a real surface the way
@@ -496,10 +499,10 @@ and nothing moves.
 
 - **Static, enumerable options** (variant, size, tone) map to modifier classes:
   `mob-btn mob-btn--primary mob-btn--md`.
-- **Runtime state** (loading, selected, invalid, expanded, sign) maps to `data-` attributes:
-  `data-mob-loading`, `data-mob-selected`, `data-mob-sign="negative"`. CSS reads them with attribute
-  selectors, they survive server rendering, and they are inspectable in devtools without decoding a
-  class-name soup.
+- **Runtime state** uses native and ARIA state where it exists: `disabled`, `aria-selected`,
+  `aria-expanded`, `aria-invalid`, `aria-busy`. Use only documented `data-mob-*` hooks for state
+  without an equivalent, such as `data-mob-loading`, `data-mob-error` and `data-mob-sign="negative"`.
+  These attributes survive server rendering and stay inspectable in devtools.
 - **Map, never concatenate.** Look options up in a lookup object so an invalid value fails loudly
   and static analysers (Tailwind's scanner, CSS-module type generation, dead-CSS tooling) can see
   every class that can be emitted.
@@ -517,9 +520,10 @@ const VARIANT = {
 const SIZE = { sm: 'mob-btn--sm', md: 'mob-btn--md', lg: 'mob-btn--lg' } as const;
 ```
 
-`.mob-btn`, `.mob-icon-btn`, `.mob-tab`, `.mob-menu-item` and `.mob-chip[data-mob-interactive]` are
-the roots `base.css` already targets for the coarse-pointer hit-target floor, so those names are
-fixed. The modifier and `data-` spellings above match what `components/button.css` and
+`.mob-btn`, `.mob-icon-btn` and `.mob-tab` use the coarse-pointer hit-area rule in `base.css`;
+`.mob-menu__item` and `.mob-chip[data-mob-interactive]` grow their real boxes in their component
+files so loading pseudo-elements remain intact. Those names are fixed. The modifier and `data-`
+spellings above match what `components/button.css` and
 `components/feedback.css` ship (`data-mob-loading`, `data-mob-error`,
 `data-mob-tone="success | error | warning | info"`). **A component file is always authoritative over
 this document** — read it before wrapping it, and follow this convention only when you author a new
@@ -543,8 +547,8 @@ type ButtonProps = {
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   disabled?: boolean;
-  leadingIcon?: ReactNode;
-  trailingIcon?: ReactNode;
+  iconStart?: ReactNode;
+  iconEnd?: ReactNode;
 } & ButtonHTMLAttributes<HTMLButtonElement>;
 
 // Card
@@ -556,32 +560,27 @@ type CardProps = {
 };
 ```
 
-```tsx
-export function Button({ variant = 'secondary', size = 'md', loading, ...rest }: ButtonProps) {
-  return (
-    <button
-      className={['mob-btn', VARIANT[variant], SIZE[size]].join(' ')}
-      data-mob-loading={loading || undefined}
-      disabled={rest.disabled || loading}
-      {...rest}
-    />
-  );
-}
-```
+The complete copyable wrapper lives in
+[`examples/react/Button.tsx`](../examples/react/Button.tsx). It uses `forwardRef`, preserves native
+props, handlers, and caller `className`, defaults to `type="button"`, and still supports submit.
+`loading` always disables the button even when the caller passes `disabled={false}`, sets
+`aria-busy`, and omits the presence attribute while false. Its handler also suppresses clicks,
+including keyboard-generated clicks, when `aria-disabled="true"`.
 
 `data-mob-loading={loading || undefined}` rather than `={loading}`: React renders `data-x="false"`
 for a boolean false, and `[data-mob-loading]` would then match a button that is not loading.
 
-The same shape in Vue and Svelte — the wrapper is the same three lines in every framework, which is
-the point:
+Vue and Svelte use the same explicit lookup maps. The following fragments show the mapping rather
+than a production wrapper. A real wrapper must forward host attributes, listeners, and its ref
+equivalent; merge caller classes; and preserve caller `disabled`.
 
 ```vue
 <script setup>
 const props = defineProps({ variant: { default: 'secondary' }, size: { default: 'md' }, loading: Boolean });
 </script>
 <template>
-  <button class="mob-btn" :class="[`mob-btn--${props.variant}`, `mob-btn--${props.size}`]"
-          :data-mob-loading="props.loading || null" :disabled="props.loading"><slot /></button>
+  <button v-bind="$attrs" class="mob-btn" :class="[`mob-btn--${props.variant}`, `mob-btn--${props.size}`]"
+          :data-mob-loading="props.loading || null" :disabled="props.loading || $attrs.disabled"><slot /></button>
 </template>
 ```
 
@@ -590,9 +589,11 @@ const props = defineProps({ variant: { default: 'secondary' }, size: { default: 
   export let variant = 'secondary';
   export let size = 'md';
   export let loading = false;
+  let className = '';
+  export { className as class };
 </script>
-<button class="mob-btn mob-btn--{variant} mob-btn--{size}"
-        data-mob-loading={loading || undefined} disabled={loading}><slot /></button>
+<button {...$$restProps} class="mob-btn mob-btn--{variant} mob-btn--{size} {className}"
+        data-mob-loading={loading || undefined} disabled={loading || $$restProps.disabled}><slot /></button>
 ```
 
 (The template-literal class names above are readable, but if your toolchain statically scans class
@@ -677,75 +678,27 @@ a new primitive.
 
 ### 5.2 CI checks
 
-Four greps. They are crude on purpose: they run in a second, need no toolchain, and catch the
-failures that actually happen.
+Run the built-in heuristic audit from the application root:
 
 ```sh
-#!/usr/bin/env bash
-# bin/mob-lint.sh — run from the repo root. Exits non-zero on any violation.
-set -uo pipefail
-export LC_ALL=C          # comm requires both inputs sorted in the same collation
-SRC=${1:-src}
-SYS=mob-design/css
-fail=0
-
-# 1. Literal colour outside the token layer.
-if grep -rnE '#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(' "$SRC" \
-     --include='*.css' --include='*.scss' --include='*.tsx' --include='*.jsx' \
-     --include='*.vue' --include='*.svelte' \
-   | grep -v 'mob-lint-ok'; then
-  echo "FAIL: literal colour outside the token layer (use var(--mob-*) or the alpha ladder)"
-  fail=1
-fi
-
-# 2. Tokens referenced but never defined (typos, deleted tokens, stale copy-paste).
-#    Only references WITHOUT a fallback are checked: `var(--x, 12px)` is a
-#    deliberate optional override and is allowed to be undefined.
-#    Note the sed: do NOT pipe through `tr -d '[:space:]:'` — it eats the newlines
-#    too and collapses the whole list onto one line, so comm compares nothing.
-grep -rhoE 'var\(--mob-[a-z0-9-]+\)'         "$SRC" "$SYS" | sed 's/^var(//; s/)$//'  | sort -u > /tmp/mob-used
-grep -rhoE '\-\-mob-[a-z0-9-]+[[:space:]]*:' "$SYS"        | sed 's/[[:space:]]*:$//' | sort -u > /tmp/mob-defined
-if comm -23 /tmp/mob-used /tmp/mob-defined | grep .; then
-  echo "FAIL: the tokens above are used but not defined in $SYS"
-  fail=1
-fi
-
-# 3. Off-system radius (0 and 50% are allowed: squared-off seams, true circles).
-if grep -rnE 'border-radius:[[:space:]]*[0-9]' "$SRC" --include='*.css' \
-   | grep -vE 'var\(--mob-radius|50%|:[[:space:]]*0[;[:space:]]'; then
-  echo "FAIL: hardcoded radius — use var(--mob-radius-*)"
-  fail=1
-fi
-
-# 4. Off-system duration.
-if grep -rnE '(transition|animation)[^;]*[0-9]+m?s' "$SRC" --include='*.css' \
-   | grep -v 'var(--mob-duration'; then
-  echo "FAIL: hardcoded duration — use var(--mob-duration-*)"
-  fail=1
-fi
-
-exit $fail
+node mob-design/scripts/mob.mjs audit src
+node mob-design/scripts/mob.mjs audit src --json
 ```
 
-Add a fifth if type drifts in your codebase:
+It checks literal classes, required token references including nested fallbacks, raw-palette leaks,
+unsupported `data-mob-variant` or `data-mob-size`, presence state written as `"false"`, and literal
+colors in ordinary styles. It skips `node_modules`, `.git`, `vendor`, build, dist, and coverage,
+and it does not follow symlinks.
 
-```sh
-grep -rnE 'font-size:[[:space:]]*[0-9.]+(px|rem)' "$SRC" --include='*.css' | grep -v 'var(--mob-size'
+A legitimate brand or theme literal receives a narrow line-scoped exception with a reason:
+
+```css
+:root { --mob-brand: #6d4df0; /* mob-lint-ok: approved product brand */ }
 ```
 
-Notes from running it against this repo:
-
-- Check 1 scans `$SRC` only, never `$SYS` — the system's own CSS is *supposed* to contain hexes, and
-  its `[src]` provenance comments quote them. It still has false positives in app code: a CSS id
-  selector like `#abc`, a hex string in test data. The escape hatch is a trailing
-  `/* mob-lint-ok */` on the line, which keeps every exception visible and greppable instead of
-  silently widening the rule.
-- Check 2 deliberately matches only `var(--mob-x)` with no fallback. `var(--mob-seg-pad-x,
-  var(--mob-card-pad-x))` is an optional override hook — undefined on purpose — and flagging it
-  would train people to ignore the check.
-- Check 2 is the highest-value of the four. A typo'd `var()` renders as *nothing at all* in CSS, so
-  a misspelled token survives code review untouched and surfaces as an unstyled element three weeks
-  later.
+The audit is not AST analysis or an automatic accessibility check. Review dynamic class
+expressions, complex JavaScript or TypeScript, and real behavior through code review, a browser
+pass, and the application's native tests.
 
 ---
 
@@ -755,26 +708,28 @@ Four phases, in this order. Each is shippable on its own; none requires the next
 
 **Phase 1 — tokens.** Import `tokens.css` and nothing else. It declares custom properties and cannot
 change a pixel, with the single exception noted in 1.2: `color-scheme: dark` on `:root` alters native
-form-control and scrollbar rendering. If that is disruptive on day one, re-scope the token block from
-`:root` to a wrapper class of your own — the system ships no such class — or strip the `color-scheme`
-line until phase 4. Tokens go first because
+form-control and scrollbar rendering. If that is disruptive on day one, restore the host's intended
+`color-scheme` in its theme stylesheet after the import. Do not fork or edit the system token file.
+Tokens go first because
 every later phase references them; adopting them later means writing each phase twice.
 
-**Phase 2 — type roles.** Import the type-role and tone-utility half of `base.css` and start applying
+**Phase 2 — type roles.** Import `css/roles.css` after `tokens.css` and start applying
 `.mob-title`, `.mob-value`, `.mob-meta`, `.mob-label`, `.mob-heading-*`. Highest visual return per
 line changed, and the lowest risk: these rules set family, size, weight, tracking and colour — not
 layout. Do it second because the mono/sans split is the identity, so this is the phase where the
 screens start looking like the system, and it forces the "which of these is a number and which is
 prose?" audit early, while it is still cheap.
 
-Note that importing `base.css` wholesale also restyles `body`, links, scrollbars and focus. That is
-usually desirable; if it is not yet, copy the type-role block first and take the rest in phase 3.
+`roles.css` does not restyle `body`, links, scrollbars or global focus. It explicitly sets the
+mono/sans families and tabular figures required by each data role; still inspect inherited host
+weight and decoration on semantic elements. Importing `base.css` later adds the global contract.
 
-**Phase 3 — controls.** Buttons, inputs, chips, tabs. This is where the geometry contract lands:
-heights of 30/34/40px, `--mob-control-px-*` padding, radius tracking size, the focus ring, the
-coarse-pointer hit-target floor. It comes after type because control labels are type, and before
-layout because layout depends on control heights — the source dashboard aligns two columns on a 34px
-header row, which is only stable once controls have their real heights.
+**Phase 3 — controls.** Import `motion.css` and the component files for buttons, inputs, chips and
+tabs. This is where the geometry contract lands: heights of 30/34/40px, `--mob-control-px-*`
+padding and radius tracking size. If `base.css` is still absent, the host must supply its own control
+normalization, `:focus-visible`, reduced-motion policy and 44px coarse-pointer hit area for compact
+buttons and tabs; menu rows and interactive chips carry their real-box floor in their own files.
+It comes after type and before layout because layout depends on stable control heights.
 
 **Phase 4 — layout.** Containers, gutters, density zones, section rhythm, the reset. Largest diff,
 most regression risk, so it needs everything under it to be stable — and it is the cheapest phase to
@@ -799,7 +754,7 @@ A new screen must be derivable, end to end, from:
 | # | Source | Where it lives |
 |---|---|---|
 | 1 | Semantic tokens | `css/tokens.css`, tier 2 |
-| 2 | Type roles | `css/base.css` — `.mob-display-*`, `.mob-heading-*`, `.mob-title`, `.mob-figure-*`, `.mob-body*`, `.mob-value*`, `.mob-meta*`, `.mob-label` |
+| 2 | Type roles | `css/roles.css` — `.mob-display-*`, `.mob-heading-*`, `.mob-title`, `.mob-figure-*`, `.mob-body*`, `.mob-value*`, `.mob-meta*`, `.mob-label` |
 | 3 | Grid and layout rules | `--mob-container-*`, `--mob-gutter-*`, `--mob-grid-gap`, `--mob-stack-gap`, `--mob-section-gap` |
 | 4 | Component library | `css/components/` |
 | 5 | State matrix | default / hover / focus / pressed / selected / disabled / loading / error, per component |
@@ -809,17 +764,17 @@ A new screen must be derivable, end to end, from:
 
 **Nothing arbitrary may be left over.** Concretely, before a screen ships:
 
-- [ ] every colour resolves to a `var(--mob-*)` — `bin/mob-lint.sh` passes;
+- [ ] every colour resolves to a `var(--mob-*)` — `node mob-design/scripts/mob.mjs audit src` passes;
 - [ ] every type size comes from a role, not a declaration;
 - [ ] every control height comes from a size step;
 - [ ] every radius and duration comes from a token;
-- [ ] the density zone is declared on the section, not inherited by accident;
+- [ ] the density baseline is deliberate on the root/container, with explicit nested zone overrides where needed;
 - [ ] every interactive element has default, hover, focus and disabled states, and focus is visible;
 - [ ] loading states do not shift layout;
 - [ ] repeated controls have identical dimensions;
 - [ ] the screen has exactly one primary focal point, and at most one accent-filled element in view;
-- [ ] contrast checked — and if the product has to certify AA, `css/a11y.css` is loaded and
-      `data-mob-a11y="AA"` is set, rather than the failing tokens being re-picked locally;
+- [ ] contrast checked on real states; `css/a11y.css` with `data-mob-a11y="AA"` hardens the
+      calibrated palette, while a custom brand still requires its own contrast verification;
 - [ ] keyboard path walked, coarse-pointer targets checked.
 
 **And the rule that keeps the system honest:** if a screen repeatedly needs arbitrary values, the
