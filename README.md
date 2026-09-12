@@ -8,7 +8,7 @@ It provides tokens, themes, typography roles, components, and visual states. App
 behavior stays in the application: this library does not implement routes, requests, validation,
 sorting, focus traps, or menu controllers.
 
-![Projects table with status, due dates, progress, and filters](docs/assets/preview.png)
+![Projects table with status, due dates, progress, and filters](docs/assets/projects-preview-a9410429.png)
 
 ## Why use it
 
