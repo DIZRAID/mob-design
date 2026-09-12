@@ -45,6 +45,40 @@ const rolesFixture = `<!doctype html><html data-mob-theme="dark"><head><meta cha
 <span id="value" class="mob-value">456</span><span id="figure" class="mob-figure-lg">789</span>
 <h2 id="heading" class="mob-heading-md">Heading</h2></body></html>`;
 
+const selectFixture = `<!doctype html><html data-mob-theme="dark" data-mob-density="product"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/css/mob.css"></head><body>
+<main id="content" data-mob-density="product">
+  <label class="mob-field mob-field--sm"><span class="mob-field__label">Theme</span>
+    <span class="mob-input-wrap mob-input-wrap--select"><select id="theme" class="mob-select">
+      <option value="dark">Dark</option><option value="light">Light</option>
+    </select></span>
+  </label>
+  <label class="mob-field mob-field--sm"><span class="mob-field__label">Density</span>
+    <span class="mob-input-wrap mob-input-wrap--select"><select id="density" class="mob-select">
+      <option value="marketing">Marketing</option><option value="product" selected>Product</option><option value="data">Data</option>
+    </select></span>
+  </label>
+  <form id="settings">
+    <label class="mob-field"><span class="mob-field__label">Time zone</span>
+      <span class="mob-input-wrap mob-input-wrap--select"><select id="timezone" class="mob-select" name="timezone">
+        <option>Asia/Bangkok</option><option>Europe/Moscow</option><option>UTC</option>
+      </select></span>
+    </label>
+    <button id="reset" type="reset">Reset</button>
+  </form>
+</main>
+<script>
+window.__mobSelectChanges={theme:0,density:0,timezone:0};
+for(const id of Object.keys(window.__mobSelectChanges)){
+  document.querySelector('#'+id).addEventListener('change',event=>{
+    window.__mobSelectChanges[id]++;
+    if(id==='theme')document.documentElement.dataset.mobTheme=event.target.value;
+    if(id==='density'){document.documentElement.dataset.mobDensity=event.target.value;document.querySelector('#content').dataset.mobDensity=event.target.value}
+  });
+}
+</script></body></html>`;
+
 function inside(path) {
   const rel = relative(root, path);
   return rel === '' || (rel !== '..' && !rel.startsWith(`..${sep}`));
@@ -58,6 +92,10 @@ const server = createServer((request, response) => {
   }
   if (url.pathname === '/__mob-browser/roles') {
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(rolesFixture);
+    return;
+  }
+  if (url.pathname === '/__mob-browser/selects') {
+    response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(selectFixture);
     return;
   }
   let file = resolve(root, `.${decodeURIComponent(url.pathname)}`);
@@ -114,7 +152,7 @@ try {
   assert.equal(await page.locator('#dialog').evaluate((element) => getComputedStyle(element).display), 'none');
 
   const selectPage = await browser.newPage({ viewport: { width: 900, height: 720 } });
-  await selectPage.goto(`${origin}/examples/starter/`);
+  await selectPage.goto(`${origin}/__mob-browser/selects`);
   assert.equal(await selectPage.evaluate(() => CSS.supports('appearance', 'base-select') && CSS.supports('selector(::picker(select))')), true);
   await selectPage.evaluate(() => {
     const disabledOption = document.createElement('option');
@@ -122,10 +160,6 @@ try {
     disabledOption.textContent = 'Unavailable region';
     disabledOption.disabled = true;
     document.querySelector('#timezone').append(disabledOption);
-    window.__mobSelectChanges = { theme: 0, density: 0, timezone: 0 };
-    for (const id of Object.keys(window.__mobSelectChanges)) {
-      document.querySelector(`#${id}`).addEventListener('change', () => { window.__mobSelectChanges[id]++; });
-    }
   });
 
   const triggerSizes = await selectPage.locator('#timezone').evaluate((select) => {
@@ -243,6 +277,97 @@ try {
   }), false, 'a disabled select does not open');
   await selectPage.close();
 
+  const studioPage = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const studioErrors = [];
+  studioPage.on('pageerror', (error) => studioErrors.push(error.message));
+  studioPage.on('console', (message) => {
+    if (message.type() === 'error') studioErrors.push(message.text());
+  });
+  await studioPage.goto(`${origin}/examples/starter/`);
+  assert.equal(await studioPage.title(), 'Project overview — mob-design');
+  assert.equal(await studioPage.locator('h1').innerText(), 'Project overview');
+  assert.equal(await studioPage.locator('#theme').evaluate((select) => select.closest('.studio-toolbar') !== null), true);
+  assert.equal(await studioPage.locator('.studio-sidebar select').count(), 0, 'appearance controls are not parked in navigation');
+  assert.equal(await studioPage.locator('.studio-brand, .studio-workspace, .studio-art').count(), 0, 'starter has no invented identity or decorative mock artwork');
+  assert.equal(await studioPage.locator('#project-rows tr').count(), 4);
+  assert.equal(await studioPage.locator('#active-count').innerText(), '3');
+  assert.equal(await studioPage.locator('#completed-count').innerText(), '1');
+  assert.equal(await studioPage.locator('#nav-project-count').innerText(), '4');
+  assert.equal(await studioPage.locator('#task-count').innerText(), '2 / 4');
+  assert.equal(await studioPage.locator('#next-task').innerText(), 'Prepare CMS handoff notes');
+  assert.equal(await studioPage.locator('#feature-progress').getAttribute('aria-valuenow'), '68');
+
+  await studioPage.click('[data-filter="active"]');
+  assert.equal(await studioPage.locator('#project-rows tr').count(), 3);
+  assert.ok(await studioPage.locator('[data-filter="active"]').getAttribute('aria-pressed') === 'true');
+  await studioPage.click('[data-filter="completed"]');
+  assert.equal(await studioPage.locator('#project-rows tr').count(), 1);
+  assert.match(await studioPage.locator('#project-rows').innerText(), /Editorial toolkit/);
+  await studioPage.click('[data-filter="all"]');
+  assert.equal(await studioPage.locator('#project-rows tr').count(), 4);
+
+  await studioPage.click('#new-project');
+  assert.equal(await studioPage.locator('#project-dialog').evaluate((dialog) => dialog.open), true);
+  assert.equal(await studioPage.evaluate(() => document.activeElement?.id), 'project-name');
+  await studioPage.click('#project-create');
+  assert.equal(await studioPage.locator('#project-name').getAttribute('aria-invalid'), 'true');
+  assert.equal(await studioPage.locator('#project-name-error').isVisible(), true);
+  assert.equal(await studioPage.evaluate(() => document.activeElement?.id), 'project-name');
+  await studioPage.fill('#project-name', 'Canceled project');
+  await studioPage.click('#project-cancel');
+  assert.equal(await studioPage.locator('#project-dialog').evaluate((dialog) => dialog.open), false);
+  assert.equal(await studioPage.locator('#project-rows tr').count(), 4, 'cancel does not create a project');
+  assert.equal(await studioPage.evaluate(() => document.activeElement?.id), 'new-project');
+
+  await studioPage.click('#new-project');
+  await studioPage.keyboard.press('Escape');
+  assert.equal(await studioPage.locator('#project-dialog').evaluate((dialog) => dialog.open), false);
+  assert.equal(await studioPage.evaluate(() => document.activeElement?.id), 'new-project', 'Escape restores focus to the opener');
+
+  await studioPage.click('#new-project');
+  await studioPage.fill('#project-name', 'Pending canceled project');
+  await studioPage.click('#project-create');
+  assert.equal(await studioPage.locator('#project-create').getAttribute('aria-busy'), 'true');
+  await studioPage.click('#project-cancel');
+  await studioPage.waitForTimeout(550);
+  assert.equal(await studioPage.locator('#project-dialog').evaluate((dialog) => dialog.open), false);
+  assert.equal(await studioPage.locator('#project-rows tr').count(), 4, 'canceling a pending creation prevents a late insert');
+  assert.equal(await studioPage.locator('#active-count').innerText(), '3');
+  assert.equal(await studioPage.evaluate(() => document.activeElement?.id), 'new-project');
+
+  await studioPage.click('#new-project');
+  await studioPage.fill('#project-name', 'Packaging system');
+  await studioPage.selectOption('#project-type', 'Identity');
+  await studioPage.fill('#project-due', '');
+  await studioPage.click('#project-create');
+  assert.equal(await studioPage.locator('#project-create').getAttribute('aria-busy'), 'true');
+  await studioPage.waitForTimeout(550);
+  assert.equal(await studioPage.locator('#project-dialog').evaluate((dialog) => dialog.open), false);
+  assert.equal(await studioPage.locator('#active-count').innerText(), '4');
+  assert.equal(await studioPage.locator('#completed-count').innerText(), '1');
+  assert.equal(await studioPage.locator('#nav-project-count').innerText(), '5');
+  assert.equal(await studioPage.locator('#project-rows tr').count(), 5);
+  const createdRow = studioPage.locator('#project-rows tr').first();
+  assert.match(await createdRow.innerText(), /Packaging system/);
+  assert.match(await createdRow.innerText(), /No due date/);
+  assert.match(await studioPage.locator('#activity-list li').first().innerText(), /created Packaging system/i);
+
+  await studioPage.click('.studio-task:has([data-task-id="cms-notes"])');
+  assert.equal(await studioPage.locator('[data-task-id="cms-notes"]').isChecked(), true);
+  assert.equal(await studioPage.locator('#task-count').innerText(), '3 / 4');
+  assert.equal(await studioPage.locator('#feature-progress').getAttribute('aria-valuenow'), '72');
+  assert.equal(await studioPage.locator('#next-task').innerText(), 'Approve mobile art direction');
+  assert.match(await studioPage.locator('#activity-list li').first().innerText(), /completed prepare cms handoff notes/i);
+  await studioPage.click('.studio-task:has([data-task-id="mobile-direction"])');
+  assert.equal(await studioPage.locator('#task-count').innerText(), '4 / 4');
+  assert.equal(await studioPage.locator('#next-task').innerText(), 'This week’s tasks are complete');
+  await studioPage.selectOption('#theme', 'light');
+  await studioPage.selectOption('#density', 'data');
+  assert.equal(await studioPage.locator('html').getAttribute('data-mob-theme'), 'light');
+  assert.equal(await studioPage.locator('#content').getAttribute('data-mob-density'), 'data');
+  assert.deepEqual(studioErrors, []);
+  await studioPage.close();
+
   await page.goto(`${origin}/__mob-browser/roles`);
   const roles = await page.evaluate(() => ({
     body: getComputedStyle(document.body).fontFamily,
@@ -287,27 +412,52 @@ try {
   assert.notEqual(coarseResult.menuAfter, 'none', 'menu loading pseudo-element remains active');
   assert.notEqual(coarseResult.chipAfter, 'none', 'chip loading pseudo-element remains active');
 
-  await coarsePage.goto(`${origin}/examples/starter/`);
+  await coarsePage.goto(`${origin}/__mob-browser/selects`);
   await coarsePage.locator('#timezone').click();
   await coarsePage.waitForFunction(() => document.querySelector('#timezone').matches(':open'));
   const coarseOptions = await coarsePage.locator('#timezone option').evaluateAll((options) => options.map((option) => option.getBoundingClientRect().toJSON()));
   assert.ok(coarseOptions.every((box) => box.height >= 44), 'coarse picker options meet the 44px target floor');
   assert.ok(coarseOptions.every((box) => box.left >= 0 && box.right <= 375), 'picker options fit the narrow viewport');
   await coarsePage.keyboard.press('Escape');
+  await coarsePage.goto(`${origin}/examples/starter/`);
+  const coarseErrors = [];
+  coarsePage.on('pageerror', (error) => coarseErrors.push(error.message));
+  coarsePage.on('console', (message) => {
+    if (message.type() === 'error') coarseErrors.push(message.text());
+  });
   await coarsePage.selectOption('#theme', 'light');
   await coarsePage.selectOption('#density', 'data');
   assert.equal(await coarsePage.locator('html').getAttribute('data-mob-theme'), 'light');
   assert.equal(await coarsePage.locator('#content').getAttribute('data-mob-density'), 'data');
   const overflow = await coarsePage.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   assert.ok(overflow <= 0, `starter must not overflow a 375px viewport (overflow ${overflow}px)`);
-  await coarsePage.fill('#name', 'x');
-  await coarsePage.click('#save');
-  assert.equal(await coarsePage.locator('#name').getAttribute('aria-invalid'), 'true');
-  await coarsePage.fill('#name', 'Browser test');
-  await coarsePage.click('#save');
-  assert.equal(await coarsePage.locator('#save').getAttribute('aria-busy'), 'true');
-  await coarsePage.waitForTimeout(700);
-  assert.match(await coarsePage.locator('#status').innerText(), /saved/i);
+  assert.ok((await coarsePage.locator('.studio-nav__link').evaluateAll((links) => links.map((link) => link.getBoundingClientRect().height))).every((height) => height >= 44));
+  await coarsePage.click('[data-filter="completed"]');
+  assert.equal(await coarsePage.locator('#project-rows tr').count(), 1);
+  await coarsePage.click('[data-filter="all"]');
+  assert.equal(await coarsePage.locator('#project-rows tr').count(), 4);
+  await coarsePage.click('#new-project');
+  assert.equal(await coarsePage.locator('#project-dialog').evaluate((dialog) => dialog.open), true);
+  await coarsePage.fill('#project-name', 'VeryLongProjectNameWithoutSpaces'.repeat(8));
+  assert.equal((await coarsePage.locator('#project-name').inputValue()).length, 64);
+  await coarsePage.click('#project-create');
+  await coarsePage.waitForTimeout(550);
+  assert.equal(await coarsePage.locator('#project-dialog').evaluate((dialog) => dialog.open), false);
+  assert.equal(await coarsePage.evaluate(() => document.activeElement?.id), 'new-project');
+  assert.equal(await coarsePage.locator('#project-rows tr').count(), 5);
+  const longNameFit = await coarsePage.evaluate(() => {
+    const row = document.querySelector('#project-rows tr');
+    const activity = document.querySelector('#activity-list li');
+    return {
+      overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      rowRight: row.getBoundingClientRect().right,
+      activityRight: activity.getBoundingClientRect().right,
+      viewport: document.documentElement.clientWidth,
+    };
+  });
+  assert.ok(longNameFit.overflow <= 0, `long project name must not create document overflow (overflow ${longNameFit.overflow}px)`);
+  assert.ok(longNameFit.rowRight <= longNameFit.viewport && longNameFit.activityRight <= longNameFit.viewport, 'long project name wraps inside project and activity surfaces');
+  assert.deepEqual(coarseErrors, []);
   await coarse.close();
 
   console.log('mob-design browser checks passed');

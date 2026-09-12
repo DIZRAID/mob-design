@@ -30,6 +30,9 @@ Every screen has exactly one obvious focal point. Rank everything else below it,
 5. metadata
 6. ambient or decorative elements
 
+These are ranks, not required regions. The working data or task surface may be the focal point; do
+not add a hero, metric, or primary action merely to fill a slot in this list.
+
 **Why.** On a near-black canvas with a restrained palette there is no spare contrast to fix a flat
 composition after the fact. If two unrelated elements land at equal weight, the reader has to do
 the ranking work themselves, on every visit. Rank once, in the design.

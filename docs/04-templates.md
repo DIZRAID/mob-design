@@ -5,8 +5,9 @@ container width, the order of regions, and — most importantly — **where the 
 lives**, so that eight different people building eight different screens do not each invent
 a different answer.
 
-Templates are not layouts to fill in blindly. They are the default you deviate from
-deliberately, in writing, when the content genuinely demands it.
+Templates are optional compositions, not layouts to fill in blindly. Retain only the regions that
+the host's tasks and data support. Existing navigation and screen structure take precedence; use a
+template when it clarifies those decisions rather than replacing them.
 
 ### How to read these
 
@@ -516,7 +517,7 @@ capped at 68ch and centred.
 | Getting in | Auth | `product` | Full width inside the card |
 | Explaining | Docs / content | `product` | None — search is the functional primary |
 
-If a page you are building does not fit any of these, that is worth saying out loud before
-building it. Usually it is two templates stapled together and should be two pages. Sometimes
-it is a genuinely new template, in which case it belongs in this file — with its density
-zone, its container width, and its answer to *where does the primary action live*.
+If a page does not fit one composition, start from the host task and information architecture.
+It may combine regions from several examples without needing to become two unfamiliar pages.
+A recurring composition may become a new template once its density, width, and action placement
+have been verified in real use.

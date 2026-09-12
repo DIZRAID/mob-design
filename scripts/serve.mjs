@@ -34,7 +34,7 @@ const server = createServer((request, response) => {
   let pathname;
   try { pathname = decodeURIComponent(new URL(request.url, `http://${host}`).pathname); }
   catch { response.writeHead(400).end('Bad request'); return; }
-  if (pathname === '/') { response.writeHead(302, { location: '/showcase/' }).end(); return; }
+  if (pathname === '/') { response.writeHead(302, { location: '/examples/starter/' }).end(); return; }
   if (pathname.split('/').some((part) => part.startsWith('.'))) { response.writeHead(404).end('Not found'); return; }
   let file = resolve(root, `.${pathname}`);
   if (!inside(file)) { response.writeHead(403).end('Forbidden'); return; }
@@ -48,8 +48,8 @@ const server = createServer((request, response) => {
 });
 
 server.listen(port, host, () => {
-  console.log(`mob-design preview: http://${host}:${port}/showcase/`);
-  console.log(`starter: http://${host}:${port}/examples/starter/`);
+  console.log(`mob-design preview: http://${host}:${port}/examples/starter/`);
+  console.log(`showcase: http://${host}:${port}/showcase/`);
 });
 server.on('error', (error) => {
   if (error.code === 'EADDRINUSE') console.error(`mob-design preview: port ${port} is busy. Try PORT=4174 npm run preview.`);

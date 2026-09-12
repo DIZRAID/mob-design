@@ -15,8 +15,8 @@ Read `00-principles.md` first; every entry here is a principle failing.
 **Why it breaks.** Colour denotes meaning here (principle 6): violet = action, green = positive,
 red = negative, series 1–8 = *this entity*. A gradient sprays four unowned hues across a surface and
 the reader can no longer tell a meaningful colour from a decorative one.
-**Instead.** Structural contrast — size, weight, luminance, spacing. If a surface needs to feel
-special, give it `--mob-radius-2xl` and marketing density, not a gradient.
+**Instead.** Build hierarchy from the content's meaning, then use size, weight, luminance, and
+spacing to express it. Do not substitute extra radius or a looser density for a missing purpose.
 
 ### Five shades of accent used decoratively
 
@@ -204,8 +204,8 @@ user has to probe the page to learn what is interactive instead of learning the 
 
 **Why it breaks.** Contrast becomes a function of time — the same text passes and fails as the
 animation cycles — and it repaints continuously behind content the user is trying to read.
-**Instead.** Nothing behind body text. Ambient treatment belongs in marketing zones, away from
-anything that must be read.
+**Instead.** Keep text on a stable, readable surface. Add ambient decoration only when a specific
+brief gives it a content purpose, and keep it away from anything that must be read.
 
 ### Removing the focus outline
 
@@ -219,6 +219,24 @@ never delete it.
 ---
 
 ## Components and information design
+
+### Generic demo packaging
+
+**Why it breaks.** A plausible logo, tagline, team identity, three KPI cards, and decorative
+grid-orbit artwork can make a generated screen look complete while displacing the actual task.
+It also changes a host product's meaning without evidence. Research on
+[AI prototypes in real design contexts](https://www.nngroup.com/articles/ai-prototyping/) found
+that vague goals encourage assumptions and familiar patterns that may not fit the user's task.
+[Anthropic's frontend-design analysis](https://claude.com/blog/improving-frontend-design-through-skills)
+describes the related convergence toward generic visual defaults.
+
+**Instead.** Preserve the host's brand, content, navigation, and working behavior. Choose the layout
+from the real data and task; the working content may be the focal point. Never invent business
+metrics or identity details. A standalone sample must label its data as sample data, and every
+visible action must work.
+
+This is a default for product screens and adoption examples, not a ban on mob-design's violet
+action color, font pairing, cards, or deliberate catalogue demonstrations of individual components.
 
 ### A variant created for a one-off visual requirement
 

@@ -3,94 +3,198 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>mob-design — working starter screen</title>
+  <title>Project overview — mob-design</title>
   <link rel="stylesheet" href="../../css/mob.css">
   <link rel="stylesheet" href="./app.css">
 </head>
 <body>
-  <header class="demo-header">
-    <a class="mob-title" href="./">mob-design</a>
-    <div class="mob-cluster">
-      <label class="mob-field mob-field--sm">
-        <span class="mob-field__label">Theme</span>
-        <span class="mob-input-wrap mob-input-wrap--select">
-          <select id="theme" class="mob-select" aria-label="Interface theme">
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </span>
-      </label>
-      <label class="mob-field mob-field--sm">
-        <span class="mob-field__label">Density</span>
-        <span class="mob-input-wrap mob-input-wrap--select">
-          <select id="density" class="mob-select" aria-label="Interface density">
-            <option value="marketing">Marketing</option>
-            <option value="product" selected>Product</option>
-            <option value="data">Data</option>
-          </select>
-        </span>
-      </label>
-    </div>
-  </header>
+  <div class="studio-app">
+    <aside class="studio-sidebar">
+      <nav class="studio-nav" aria-label="Project sections">
+        <p class="mob-label">Navigation</p>
+        <a class="studio-nav__link is-active" href="#overview" aria-current="page">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 3h5v5H3zM12 3h5v5h-5zM3 12h5v5H3zM12 12h5v5h-5z"/></svg>
+          Overview
+        </a>
+        <a class="studio-nav__link" href="#projects">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5.5h5l1.4 1.6H17v8.4H3z"/></svg>
+          Projects
+          <span id="nav-project-count" class="studio-nav__count">4</span>
+        </a>
+        <a class="studio-nav__link" href="#activity">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M10 3a7 7 0 1 0 7 7h-2a5 5 0 1 1-5-5zm-1 3h2v4.2l3 1.8-1 1.7-4-2.4z"/></svg>
+          Activity
+        </a>
+      </nav>
+    </aside>
 
-  <main id="content" class="demo-shell" data-mob-density="product">
-    <section class="demo-intro">
-      <p class="mob-label">Working example · no backend</p>
-      <h1 class="mob-heading-xl">Profile settings</h1>
-      <p class="mob-body">This small screen demonstrates real fields, validation, and save states. It does not send data anywhere.</p>
-    </section>
-
-    <div class="demo-grid">
-      <form id="settings" class="mob-card demo-form" novalidate>
-        <div class="mob-card__header">
-          <div class="mob-stack demo-card-heading">
-            <h2 class="mob-title">Basic details</h2>
-            <p class="mob-body-sm">Changes are saved only in this page's memory.</p>
-          </div>
+    <main id="content" class="studio-main" data-mob-density="product">
+      <header id="overview" class="studio-topbar">
+        <h1 class="mob-heading-xl">Project overview</h1>
+        <div class="studio-toolbar">
+          <label class="mob-field mob-field--sm">
+            <span class="mob-field__label">Theme</span>
+            <span class="mob-input-wrap mob-input-wrap--select">
+              <select id="theme" class="mob-select" aria-label="Interface theme">
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </span>
+          </label>
+          <label class="mob-field mob-field--sm">
+            <span class="mob-field__label">Density</span>
+            <span class="mob-input-wrap mob-input-wrap--select">
+              <select id="density" class="mob-select" aria-label="Interface density">
+                <option value="marketing">Relaxed</option>
+                <option value="product" selected>Balanced</option>
+                <option value="data">Compact</option>
+              </select>
+            </span>
+          </label>
+          <button id="new-project" class="mob-btn mob-btn--primary" type="button">
+            <span aria-hidden="true">＋</span>
+            New project
+          </button>
         </div>
+      </header>
 
-        <label id="name-field" class="mob-field">
-          <span class="mob-field__label">Display name <span class="mob-field__required" aria-hidden="true">*</span></span>
-          <input id="name" class="mob-input" name="name" value="Alex" required minlength="2" aria-describedby="name-help">
-          <span id="name-help" class="mob-field__hint">At least two characters. Enter “error” to see the demo save fail.</span>
-          <span id="name-error" class="mob-field__error" hidden>Enter at least two characters.</span>
+      <section class="studio-summary" aria-label="Project summary">
+        <div class="studio-summary__item">
+          <span class="mob-meta">Active projects</span>
+          <strong id="active-count" class="mob-figure-md">3</strong>
+        </div>
+        <div class="studio-summary__item">
+          <span class="mob-meta">Completed projects</span>
+          <strong id="completed-count" class="mob-figure-md">1</strong>
+        </div>
+        <div class="studio-summary__item">
+          <span class="mob-meta">This week tasks</span>
+          <strong id="task-count" class="mob-figure-md">2 / 4</strong>
+        </div>
+      </section>
+
+      <section class="studio-focus-grid" aria-label="Current work">
+        <article class="mob-card mob-card--featured studio-feature">
+          <header class="studio-feature__header">
+            <div>
+              <h2 class="mob-heading-lg">Website refresh</h2>
+              <span class="mob-meta">P-104</span>
+            </div>
+            <span class="mob-chip mob-chip--sm mob-chip--accent">In progress</span>
+          </header>
+          <p class="mob-body-sm studio-feature__description">Redesign the website and prepare the component handoff.</p>
+
+          <div class="studio-feature__progress">
+            <div class="studio-progress-label">
+              <span class="mob-meta">Progress</span>
+              <strong id="feature-progress-value" class="mob-value">68%</strong>
+            </div>
+            <div id="feature-progress" class="mob-progress mob-progress--lg" style="--mob-progress:.68" role="progressbar" aria-label="Website refresh progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="68">
+              <div class="mob-progress__fill"></div>
+            </div>
+          </div>
+
+          <div class="studio-feature__details">
+            <div>
+              <span class="mob-meta">Next task</span>
+              <strong id="next-task">Prepare CMS handoff notes</strong>
+            </div>
+            <div>
+              <span class="mob-meta">Due date</span>
+              <strong>Oct 02</strong>
+            </div>
+            <div>
+              <span class="mob-meta">Owners</span>
+              <div class="mob-avatar-stack" aria-label="Owners: Maya, Leon, Ari">
+                <span class="mob-avatar mob-avatar--md" data-mob-series="accent" title="Maya">MA</span>
+                <span class="mob-avatar mob-avatar--md" data-mob-series="2" title="Leon">LE</span>
+                <span class="mob-avatar mob-avatar--md" data-mob-series="5" title="Ari">AR</span>
+              </div>
+            </div>
+          </div>
+        </article>
+
+        <aside class="mob-card studio-week" aria-labelledby="week-title">
+          <header class="mob-card__header">
+            <h2 id="week-title" class="mob-card__title">This week</h2>
+            <span id="week-count" class="mob-card__meta">2 of 4</span>
+          </header>
+          <div id="task-list" class="studio-task-list"></div>
+          <p class="studio-week__hint">Check off a task to update the project.</p>
+        </aside>
+      </section>
+
+      <div class="studio-lower-grid">
+        <section id="projects" class="mob-card mob-card--flush studio-projects" aria-labelledby="projects-title">
+          <header class="mob-card__header">
+            <h2 id="projects-title" class="mob-card__title">Projects</h2>
+            <div class="studio-filters" role="group" aria-label="Filter projects">
+              <button class="studio-filter is-selected" type="button" data-filter="all" aria-pressed="true">All</button>
+              <button class="studio-filter" type="button" data-filter="active" aria-pressed="false">Active</button>
+              <button class="studio-filter" type="button" data-filter="completed" aria-pressed="false">Completed</button>
+            </div>
+          </header>
+          <div class="mob-table-scroll" role="region" aria-label="Project portfolio table" tabindex="0">
+            <table class="mob-table studio-project-table">
+              <thead><tr><th scope="col">Project</th><th scope="col">Status</th><th scope="col">Due</th><th scope="col">Progress</th></tr></thead>
+              <tbody id="project-rows"></tbody>
+            </table>
+          </div>
+          <p id="project-empty" class="studio-project-empty" hidden>No projects match this filter.</p>
+        </section>
+
+        <section id="activity" class="mob-card studio-activity" aria-labelledby="activity-title">
+          <header class="mob-card__header">
+            <h2 id="activity-title" class="mob-card__title">Activity</h2>
+          </header>
+          <ol id="activity-list" class="studio-activity-list"></ol>
+        </section>
+      </div>
+
+      <footer class="studio-footer">
+        Sample data · changes reset on reload · <a href="../../showcase/">Explore components</a>
+      </footer>
+      <p id="workspace-status" class="mob-sr-only" aria-live="polite"></p>
+    </main>
+  </div>
+
+  <dialog id="project-dialog" class="mob-modal mob-modal--sm" aria-labelledby="project-dialog-title" aria-describedby="project-dialog-desc">
+    <form id="project-form" novalidate>
+      <header class="mob-modal__header">
+        <h2 id="project-dialog-title" class="mob-modal__title">Create a project</h2>
+        <p id="project-dialog-desc" class="mob-modal__desc">Add a local project to this sample.</p>
+        <button id="dialog-close" class="mob-icon-btn mob-icon-btn--sm mob-icon-btn--quiet mob-modal__dismiss" type="button" aria-label="Close dialog">×</button>
+      </header>
+      <div class="mob-modal__body studio-dialog-fields">
+        <label id="project-name-field" class="mob-field">
+          <span class="mob-field__label">Project name <span class="mob-field__required" aria-hidden="true">*</span></span>
+          <input id="project-name" class="mob-input" name="name" required minlength="2" maxlength="64" autocomplete="off" aria-describedby="project-name-help">
+          <span id="project-name-help" class="mob-field__hint">Use at least two characters.</span>
+          <span id="project-name-error" class="mob-field__error" hidden>Enter a project name.</span>
         </label>
-
         <label class="mob-field">
-          <span class="mob-field__label">Time zone</span>
+          <span class="mob-field__label">Project type</span>
           <span class="mob-input-wrap mob-input-wrap--select">
-            <select id="timezone" class="mob-select" name="timezone">
-              <option>Asia/Bangkok</option>
-              <option>Europe/Moscow</option>
-              <option>UTC</option>
+            <select id="project-type" class="mob-select" name="type">
+              <option>Identity</option>
+              <option selected>Web experience</option>
+              <option>Campaign</option>
+              <option>Editorial</option>
             </select>
           </span>
         </label>
-
-        <label class="mob-checkbox">
-          <input class="mob-checkbox__input" type="checkbox" name="digest" checked>
-          <span class="mob-checkbox__box" aria-hidden="true"></span>
-          <span class="mob-checkbox__label">Send a weekly summary</span>
+        <label class="mob-field">
+          <span class="mob-field__label">Due date</span>
+          <input id="project-due" class="mob-input" name="due" type="date" value="2026-10-18">
         </label>
+      </div>
+      <footer class="mob-modal__footer">
+        <button id="project-cancel" class="mob-btn mob-btn--ghost" type="button">Cancel</button>
+        <button id="project-create" class="mob-btn mob-btn--primary" type="submit">Create project</button>
+      </footer>
+    </form>
+  </dialog>
 
-        <div class="demo-actions">
-          <button id="save" class="mob-btn mob-btn--primary" type="submit">Save</button>
-          <button id="reset" class="mob-btn mob-btn--ghost" type="reset">Reset</button>
-        </div>
-      </form>
-
-      <aside class="mob-card mob-card--sunken demo-status" aria-labelledby="status-title">
-        <h2 id="status-title" class="mob-title">Status</h2>
-        <div id="status" aria-live="polite">
-          <div class="mob-empty mob-empty--bare">
-            <div class="mob-empty__visual" aria-hidden="true">✓</div>
-            <p class="mob-empty__title">No changes yet</p>
-            <p class="mob-empty__sub">Edit the form and save it to see the result.</p>
-          </div>
-        </div>
-      </aside>
-    </div>
-  </main>
   <script type="module" src="./app.js"></script>
 </body>
 </html>

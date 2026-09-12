@@ -8,7 +8,7 @@ It provides tokens, themes, typography roles, components, and visual states. App
 behavior stays in the application: this library does not implement routes, requests, validation,
 sorting, focus traps, or menu controllers.
 
-![The mob-design starter screen](docs/assets/preview.png)
+![A dark mob-design project overview with progress, tasks, a project table, and activity](docs/assets/preview.png)
 
 ## Why use it
 
@@ -23,8 +23,8 @@ application's handlers, data, locale, numerical precision, and accessible behavi
 
 ## Preview locally
 
-You need Node.js 18 or newer. No `npm install` is required. The repository is currently private,
-so clone it through an authenticated GitHub account.
+You need Node.js 18 or newer. No `npm install` is required. If the repository is private, clone it
+through an authenticated GitHub account.
 
 ```bash
 git clone https://github.com/DIZRAID/mob-design.git
@@ -32,12 +32,13 @@ cd mob-design
 npm run preview
 ```
 
-Open `http://127.0.0.1:4173/`; the server redirects to the component showcase.
+Open `http://127.0.0.1:4173/`; the server redirects to the interactive project overview.
 
+- [Open the local starter](http://127.0.0.1:4173/examples/starter/) for a working project overview
+  with filters, task progress, theme and density controls, and local project
+  creation without a backend.
 - [Open the local showcase](http://127.0.0.1:4173/showcase/) for the broad component and state
-  catalogue. It is a visual reference, not a working product.
-- [Open the local starter](http://127.0.0.1:4173/examples/starter/) for a small working settings
-  screen with theme and density controls, client validation, and save states without a backend.
+  catalogue. It is a visual reference rather than a working product.
 
 Any local HTTP server also works:
 
@@ -45,7 +46,7 @@ Any local HTTP server also works:
 python3 -m http.server 4173 --bind 127.0.0.1
 ```
 
-Then open `http://127.0.0.1:4173/showcase/`. Do not open the files by double-clicking them;
+Then open `http://127.0.0.1:4173/examples/starter/`. Do not open the files by double-clicking them;
 HTTP resolves the relative CSS imports and ES modules correctly.
 
 ## Add it to an application
@@ -198,7 +199,7 @@ A useful prompt is:
 css/                 tokens, roles, full bundle, and component CSS
 tokens/              JSON mirrors for external tools
 tailwind/preset.js   opt-in preset with semantic values
-examples/starter/    small working screen without a backend
+examples/starter/    interactive project overview without a backend
 examples/react/      thin React wrapper
 showcase/            broad visual catalogue
 scripts/mob.mjs      find, check, audit, and init

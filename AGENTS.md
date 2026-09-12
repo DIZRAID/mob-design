@@ -79,6 +79,18 @@ Density `marketing|product|data` may live on a container; a root value sets the 
 - Do not copy pieces of system CSS into the application. Import the source and override public
   tokens or hooks in the application's own layer.
 
+## Avoid generic demo packaging
+
+Preserve the host's real brand, wording, navigation, screen structure, and task priorities. Do not
+invent a logo, tagline, team identity, testimonial, KPI, or business metric to make a screen look
+finished. Declare sample data when a standalone example needs it.
+
+Choose regions from the actual task and data. Do not default to a hero plus three promotional cards,
+or add decorative grids, orbits, gradients, and glows without a content purpose in the brief. This
+guidance does not ban the system's violet action color, typography, cards, or intentional component
+catalogue examples. Every visible action in a working example must work. See
+[`docs/10-anti-patterns.md`](docs/10-anti-patterns.md#generic-demo-packaging).
+
 ## Working vocabulary
 
 Structure: `.mob-page`, `.mob-shell`, `.mob-stack`, `.mob-cluster`, `.mob-grid`, `.mob-section`.
